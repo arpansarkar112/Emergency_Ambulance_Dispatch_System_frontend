@@ -136,7 +136,7 @@ export default function UserDashboard() {
               </div>
               <Button type="submit" className="w-full mt-4" disabled={requestMutation.isPending}>
                 <Ambulance className="mr-2 h-4 w-4" />
-                {requestMutation.isPending ? "Dispatching..." : "One-Click Request"}
+                {requestMutation.isPending ? "Dispatching..." : "Request"}
               </Button>
             </form>
           </DialogContent>
