@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { api } from "@/lib/axios";
+import { useRouter } from "next/navigation";
 
 const registerSchema = z.object({
   firstName: z.string().min(2, "First name is too short"),
@@ -22,6 +24,7 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   // Fallback to standard state if form library isn't fully integrated, but we'll use react-hook-form format
   // Actually, I'll just keep it simple since I need to use the actual hook
@@ -49,13 +52,34 @@ export default function RegisterPage() {
             <p className="text-sm text-muted-foreground">Enter your details below to create your account</p>
           </div>
 
-          <form onSubmit={(e) => {
+          <form onSubmit={async (e) => {
             e.preventDefault();
             setLoading(true);
-            setTimeout(() => {
+            try {
+              // We'll extract values manually since we aren't fully using react-hook-form standard controlled inputs here for brevity
+              const form = e.target as HTMLFormElement;
+              const firstName = (form.elements.namedItem("first-name") as HTMLInputElement).value;
+              const lastName = (form.elements.namedItem("last-name") as HTMLInputElement).value;
+              const email = (form.elements.namedItem("email") as HTMLInputElement).value;
+              const password = (form.elements.namedItem("password") as HTMLInputElement).value;
+
+              const res = await api.post("/auth/register", {
+                firstName,
+                lastName,
+                email,
+                password,
+                role: "user", // default role
+              });
+              
+              if (res.data.success) {
+                toast.success("Account created successfully!");
+                router.push("/login");
+              }
+            } catch (error: any) {
+              toast.error(error.response?.data?.message || "Registration failed");
+            } finally {
               setLoading(false);
-              toast.success("Account created successfully!");
-            }, 1000);
+            }
           }}>
             <div className="grid gap-4">
               <div className="grid grid-cols-2 gap-4">
