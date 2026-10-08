@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { User, Activity, CreditCard, LogOut, Ambulance } from "lucide-react";
+import { User, Activity, CreditCard, LogOut, Ambulance, PlusCircle } from "lucide-react";
 
 const routes = [
   { label: "My Bookings", icon: Activity, href: "/dashboard" },
+  { label: "Request Ambulance", icon: PlusCircle, href: "/dashboard/request" },
   { label: "Payments", icon: CreditCard, href: "/dashboard/payments" },
   { label: "Profile", icon: User, href: "/dashboard/profile" },
 ];
@@ -30,10 +31,9 @@ export function UserSidebar() {
           ))}
         </nav>
       </div>
-      <div className="mt-auto border-t p-4">
-        <Link href="/" className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-800 transition-all">
-          <LogOut className="h-5 w-5" />
-          Back to Home
+      <div className="mt-auto border-t p-4 flex justify-center">
+        <Link href="/" className="flex items-center gap-2 font-medium text-lg tracking-tight hover:opacity-80 transition-opacity">
+          CallAmbulance.
         </Link>
       </div>
     </div>

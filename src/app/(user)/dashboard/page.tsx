@@ -7,6 +7,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import Link from "next/link";
 
 export default function UserDashboard() {
   const { data: requests, isLoading } = useQuery({
@@ -43,9 +44,11 @@ export default function UserDashboard() {
     <div className="flex-1 space-y-4 p-8 pt-6">
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">My Bookings</h2>
-        <Button onClick={() => toast.success("Request feature would go here!")}>
-          Request Ambulance
-        </Button>
+        <Link href="/dashboard/request">
+          <Button>
+            Request Ambulance
+          </Button>
+        </Link>
       </div>
 
       {activeRequests.length === 0 ? (
