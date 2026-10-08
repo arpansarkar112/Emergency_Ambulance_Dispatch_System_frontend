@@ -31,7 +31,10 @@ export default function LoginPage() {
         toast.error(res.error);
       } else {
         toast.success("Login successful!");
-        router.push("/dashboard"); // We'll redirect based on role later
+        router.push("/dashboard");
+      }
+    } catch (error) {
+      toast.error("Something went wrong");
     } finally {
       setLoading(false);
     }
