@@ -8,6 +8,7 @@ import { Ambulance } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { signIn } from "next-auth/react";
+import { GoogleLogin } from "@react-oauth/google";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -26,6 +27,26 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    setLoading(true);
+    try {
+      const res = await signIn("credentials", {
+        redirect: false,
+        idToken: credentialResponse.credential,
+      });
+      if (res?.error) {
+        toast.error(res.error);
+      } else {
+        toast.success("Account linked successfully!");
+        router.push("/dashboard");
+      }
+    } catch (error) {
+      toast.error("Google sign-up failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Fallback to standard state if form library isn't fully integrated, but we'll use react-hook-form format
   // Actually, I'll just keep it simple since I need to use the actual hook
@@ -118,15 +139,13 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          <Button variant="outline" type="button" disabled={loading} onClick={() => signIn("google")}>
-            <svg role="img" viewBox="0 0 24 24" className="mr-2 h-4 w-4">
-              <path
-                fill="currentColor"
-                d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
-              />
-            </svg>
-            Google
-          </Button>
+          <div className="flex justify-center w-full">
+            <GoogleLogin 
+              onSuccess={handleGoogleSuccess}
+              onError={() => toast.error("Google sign-up failed")}
+              useOneTap
+            />
+          </div>
 
           <p className="px-8 text-center text-sm text-muted-foreground">
             Already have an account?{" "}

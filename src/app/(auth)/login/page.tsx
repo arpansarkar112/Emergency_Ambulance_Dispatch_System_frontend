@@ -9,6 +9,7 @@ import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { GoogleLogin } from "@react-oauth/google";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -31,9 +32,26 @@ export default function LoginPage() {
       } else {
         toast.success("Login successful!");
         router.push("/dashboard"); // We'll redirect based on role later
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    setLoading(true);
+    try {
+      const res = await signIn("credentials", {
+        redirect: false,
+        idToken: credentialResponse.credential, // The JWT string
+      });
+      if (res?.error) {
+        toast.error(res.error);
+      } else {
+        toast.success("Login successful!");
+        router.push("/dashboard");
       }
     } catch (error) {
-      toast.error("Something went wrong");
+      toast.error("Google login failed");
     } finally {
       setLoading(false);
     }
@@ -107,15 +125,13 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <Button variant="outline" type="button" disabled={loading} onClick={() => signIn("google")}>
-              <svg role="img" viewBox="0 0 24 24" className="mr-2 h-4 w-4">
-                <path
-                  fill="currentColor"
-                  d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
-                />
-              </svg>
-              Google
-            </Button>
+            <div className="flex justify-center w-full">
+              <GoogleLogin 
+                onSuccess={handleGoogleSuccess}
+                onError={() => toast.error("Google login failed")}
+                useOneTap
+              />
+            </div>
           </div>
 
           <p className="px-8 text-center text-sm text-muted-foreground">
