@@ -143,7 +143,6 @@ export default function RegisterPage() {
             <GoogleLogin 
               onSuccess={handleGoogleSuccess}
               onError={() => toast.error("Google sign-up failed")}
-              useOneTap
             />
           </div>
 
