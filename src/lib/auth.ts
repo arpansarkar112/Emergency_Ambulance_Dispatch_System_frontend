@@ -1,5 +1,8 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import axios from "axios";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -8,27 +11,37 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
-        role: { label: "Role", type: "text" }, // for demo login
+        role: { label: "Role", type: "text" }, // For demo login
       },
       async authorize(credentials) {
-        // Mock authorization for demo purposes
-        if (credentials?.email && credentials?.password) {
-          // If demo role is provided, mock the user
-          if (credentials.role) {
+        try {
+          if (credentials?.role && !credentials?.password) {
+             // Optional: Handle Demo Login logic here if the backend supports it, 
+             // or mock it for demo purposes if backend doesn't have a demo endpoint.
+             // Usually, demo login just auto-fills credentials. We will assume the frontend 
+             // login form passes real credentials for the demo accounts.
+          }
+
+          const res = await axios.post(`${API_URL}/auth/login`, {
+            email: credentials?.email,
+            password: credentials?.password,
+          });
+
+          const data = res.data;
+          
+          if (data.success && data.data) {
             return {
-              id: Math.random().toString(),
-              name: `Demo ${credentials.role}`,
-              email: credentials.email,
-              role: credentials.role,
+              id: data.data.user.id,
+              name: data.data.user.name || data.data.user.firstName,
+              email: data.data.user.email,
+              role: data.data.user.role,
+              accessToken: data.data.accessToken,
             };
           }
-          
-          // Regular login simulation
-          if (credentials.email === "admin@example.com") {
-            return { id: "1", name: "Admin User", email: "admin@example.com", role: "admin" };
-          }
+          return null;
+        } catch (error: any) {
+          throw new Error(error.response?.data?.message || "Invalid credentials");
         }
-        return null;
       }
     })
   ],
@@ -36,12 +49,16 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.role = (user as any).role;
+        token.accessToken = (user as any).accessToken;
+        token.id = user.id;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         (session.user as any).role = token.role;
+        (session.user as any).accessToken = token.accessToken;
+        (session.user as any).id = token.id;
       }
       return session;
     }
@@ -52,4 +69,5 @@ export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
   },
+  secret: process.env.NEXTAUTH_SECRET,
 };
