@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Ambulance } from "lucide-react";
-import { OneClickLogin } from "@/components/shared/OneClickLogin";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -46,7 +45,7 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-slate-900" />
         <div className="relative z-20 flex items-center text-lg font-medium gap-2">
           <Ambulance className="h-6 w-6" />
-          SwiftRescue
+          CallAmbulance.
         </div>
         <div className="relative z-20 mt-auto">
           <blockquote className="space-y-2">
@@ -92,12 +91,31 @@ export default function LoginPage() {
                   />
                 </div>
                 <Button className="w-full" type="submit" disabled={loading}>
-                  {loading ? "Logging in..." : "🔐 Login"}
+                  {loading ? "Signing in..." : "Sign in"}
                 </Button>
               </div>
             </form>
 
-            <OneClickLogin />
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  Or continue with
+                </span>
+              </div>
+            </div>
+
+            <Button variant="outline" type="button" disabled={loading} onClick={() => signIn("google")}>
+              <svg role="img" viewBox="0 0 24 24" className="mr-2 h-4 w-4">
+                <path
+                  fill="currentColor"
+                  d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
+                />
+              </svg>
+              Google
+            </Button>
           </div>
 
           <p className="px-8 text-center text-sm text-muted-foreground">

@@ -9,8 +9,8 @@ import AuthProvider from "@/components/providers/AuthProvider";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Ambulance Dispatch System",
-  description: "Emergency Ambulance Dispatch and Management System",
+  title: "CallAmbulance",
+  description: "Minimalist emergency response platform.",
 };
 
 export default function RootLayout({

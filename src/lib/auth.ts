@@ -1,11 +1,16 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
 import axios from "axios";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
 
 export const authOptions: NextAuthOptions = {
   providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID || "placeholder_id",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "placeholder_secret",
+    }),
     CredentialsProvider({
       name: "Credentials",
       credentials: {
@@ -46,7 +51,28 @@ export const authOptions: NextAuthOptions = {
     })
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async signIn({ user, account, profile }) {
+      if (account?.provider === "google") {
+        try {
+          const res = await axios.post(`${API_URL}/auth/social-login`, {
+            idToken: account.id_token, // Backend needs idToken
+          });
+          if (res.data.success && res.data.data) {
+            // Map backend token to NextAuth user object
+            (user as any).role = res.data.data.user.role || "user";
+            (user as any).accessToken = res.data.data.accessToken;
+            user.id = res.data.data.user.id;
+            return true;
+          }
+          return false;
+        } catch (error) {
+          console.error("Social login failed", error);
+          return false; // Return false to deny access
+        }
+      }
+      return true;
+    },
+    async jwt({ token, user, account }) {
       if (user) {
         token.role = (user as any).role;
         token.accessToken = (user as any).accessToken;
