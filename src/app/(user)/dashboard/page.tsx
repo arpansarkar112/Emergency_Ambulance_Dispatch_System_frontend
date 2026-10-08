@@ -9,8 +9,19 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import Link from "next/link";
 
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useState } from "react";
+
 export default function UserDashboard() {
-  const { data: requests, isLoading } = useQuery({
+  const [pickup, setPickup] = useState("");
+  const [dropoff, setDropoff] = useState("");
+  const [urgency, setUrgency] = useState("HIGH");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const { data: requests, isLoading, refetch } = useQuery({
     queryKey: ['my-requests'],
     queryFn: async () => {
       const res = await api.get('/requests/my-requests');
@@ -18,13 +29,38 @@ export default function UserDashboard() {
     }
   });
 
+  const requestMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await api.post('/requests', data);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success("Ambulance requested successfully!");
+      setIsDialogOpen(false);
+      setPickup("");
+      setDropoff("");
+      refetch();
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to request ambulance");
+    }
+  });
+
+  const handleRequestSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    requestMutation.mutate({
+      pickupLocation: pickup,
+      dropoffLocation: dropoff,
+      urgency
+    });
+  };
+
   const payMutation = useMutation({
     mutationFn: async (requestId: string) => {
       const res = await api.post('/payments/initiate', { requestId });
       return res.data.data;
     },
     onSuccess: (data) => {
-      // Redirect to Stripe Checkout URL
       if (data.url) {
         window.location.href = data.url;
       }
@@ -44,11 +80,69 @@ export default function UserDashboard() {
     <div className="flex-1 space-y-4 p-8 pt-6">
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">My Bookings</h2>
-        <Link href="/dashboard/request">
-          <Button>
-            Request Ambulance
-          </Button>
-        </Link>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              Request Ambulance
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Request an Ambulance</DialogTitle>
+              <DialogDescription>
+                Enter your location details. An ambulance will be dispatched immediately.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleRequestSubmit} className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <Label htmlFor="pickup">Pickup Location</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    id="pickup" 
+                    placeholder="Enter pickup address" 
+                    className="pl-9"
+                    value={pickup}
+                    onChange={(e) => setPickup(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dropoff">Destination</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    id="dropoff" 
+                    placeholder="Enter hospital name" 
+                    className="pl-9"
+                    value={dropoff}
+                    onChange={(e) => setDropoff(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="urgency">Urgency Level</Label>
+                <Select value={urgency} onValueChange={setUrgency}>
+                  <SelectTrigger id="urgency">
+                    <SelectValue placeholder="Select urgency" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CRITICAL">Critical</SelectItem>
+                    <SelectItem value="HIGH">High</SelectItem>
+                    <SelectItem value="MEDIUM">Medium</SelectItem>
+                    <SelectItem value="LOW">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button type="submit" className="w-full mt-4" disabled={requestMutation.isPending}>
+                <Ambulance className="mr-2 h-4 w-4" />
+                {requestMutation.isPending ? "Dispatching..." : "One-Click Request"}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {activeRequests.length === 0 ? (
