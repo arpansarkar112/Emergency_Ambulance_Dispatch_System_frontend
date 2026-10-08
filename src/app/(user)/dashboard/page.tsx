@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Clock, MapPin, CreditCard, Ambulance } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { toast } from "sonner";
 import Link from "next/link";
 
@@ -81,10 +81,8 @@ export default function UserDashboard() {
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">My Bookings</h2>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              Request Ambulance
-            </Button>
+          <DialogTrigger className={buttonVariants()}>
+            Request Ambulance
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
