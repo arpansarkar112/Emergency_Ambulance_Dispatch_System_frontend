@@ -8,13 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { MapPin, Phone, Clock, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 
 export default function ProviderTasksPage() {
-  const { data: session } = useQuery({
-    queryKey: ['session'],
-    queryFn: async () => await getSession(),
-  });
+  const { data: session, status: sessionStatus } = useSession();
   
   const userId = (session?.user as any)?.id;
 
@@ -64,7 +61,7 @@ export default function ProviderTasksPage() {
     }
   });
 
-  if (loadingRequests || loadingAmbulances) {
+  if (sessionStatus === "loading" || loadingRequests || loadingAmbulances) {
     return <div className="p-8">Loading your dashboard...</div>;
   }
 
@@ -136,11 +133,11 @@ export default function ProviderTasksPage() {
                   <div className="flex items-center gap-3">
                     <CardTitle className="text-xl">Dispatch #{req.id.slice(-6).toUpperCase()}</CardTitle>
                     <Badge variant={
-                      req.urgency === 'CRITICAL' ? 'destructive' :
-                      req.urgency === 'HIGH' ? 'destructive' :
-                      req.urgency === 'MEDIUM' ? 'default' : 'secondary'
+                      req.priority === 'CRITICAL' ? 'destructive' :
+                      req.priority === 'HIGH' ? 'destructive' :
+                      req.priority === 'MEDIUM' ? 'default' : 'secondary'
                     }>
-                      {req.urgency}
+                      {req.priority || "NORMAL"}
                     </Badge>
                   </div>
                   <div className="flex items-center gap-2 mt-3 text-sm font-medium text-gray-700">
@@ -158,7 +155,7 @@ export default function ProviderTasksPage() {
                       </div>
                       <div>
                         <p className="font-semibold text-gray-900">Pickup Location</p>
-                        <p className="text-gray-600">{req.pickupLocation}</p>
+                        <p className="text-gray-600">{req.pickupAddress || req.pickupLocation}</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
@@ -167,7 +164,7 @@ export default function ProviderTasksPage() {
                       </div>
                       <div>
                         <p className="font-semibold text-gray-900">Destination (Hospital)</p>
-                        <p className="text-gray-600">{req.dropoffLocation}</p>
+                        <p className="text-gray-600">{req.destinationAddress || req.dropoffLocation}</p>
                       </div>
                     </div>
                   </div>
@@ -182,6 +179,8 @@ export default function ProviderTasksPage() {
                         <SelectValue placeholder="Update Status" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="PENDING" disabled>Pending Assignment</SelectItem>
+                        <SelectItem value="ASSIGNED">Assigned (Ready)</SelectItem>
                         <SelectItem value="EN_ROUTE">En Route to Patient</SelectItem>
                         <SelectItem value="ARRIVED">Arrived at Pickup</SelectItem>
                         <SelectItem value="IN_TRANSIT">In Transit to Hospital</SelectItem>
@@ -189,8 +188,10 @@ export default function ProviderTasksPage() {
                       </SelectContent>
                     </Select>
                     
-                    <Button className="w-full justify-start gap-2" variant="outline">
-                      <Phone className="h-4 w-4" /> Contact Patient
+                    <Button className="w-full justify-start gap-2" variant="outline" asChild>
+                      <a href={`tel:${req.patientPhone || req.patient?.profile?.phone}`}>
+                        <Phone className="h-4 w-4" /> Contact {req.patient?.profile?.firstName || "Patient"}
+                      </a>
                     </Button>
                   </div>
                 </div>
