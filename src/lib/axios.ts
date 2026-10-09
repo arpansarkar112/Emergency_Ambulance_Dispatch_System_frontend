@@ -12,11 +12,14 @@ export const api = axios.create({
 api.interceptors.request.use(
   async (config) => {
     // We only use getSession on the client-side.
-    // For server-side requests, we should pass the token manually or use auth options.
     if (typeof window !== "undefined") {
-      const session = await getSession();
-      if (session && (session as any).accessToken) {
-        config.headers.Authorization = `Bearer ${(session as any).accessToken}`;
+      try {
+        const session = await getSession();
+        if (session && (session as any).accessToken) {
+          config.headers.Authorization = `Bearer ${(session as any).accessToken}`;
+        }
+      } catch (err) {
+        console.warn("Failed to fetch session for axios interceptor", err);
       }
     }
     return config;

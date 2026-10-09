@@ -97,6 +97,7 @@ export default function RegisterPage() {
                 router.push("/login");
               }
             } catch (error: any) {
+              console.error("REGISTRATION ERROR:", error);
               const apiError = error.response?.data;
               let errorMessage = apiError?.message || "Registration failed. Please check your network.";
               if (apiError?.errors && apiError.errors.length > 0) {
