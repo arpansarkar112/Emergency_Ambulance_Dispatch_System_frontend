@@ -97,7 +97,12 @@ export default function RegisterPage() {
                 router.push("/login");
               }
             } catch (error: any) {
-              toast.error(error.response?.data?.message || "Registration failed");
+              const apiError = error.response?.data;
+              let errorMessage = apiError?.message || "Registration failed. Please check your network.";
+              if (apiError?.errors && apiError.errors.length > 0) {
+                errorMessage = apiError.errors[0].message;
+              }
+              toast.error(errorMessage);
             } finally {
               setLoading(false);
             }
