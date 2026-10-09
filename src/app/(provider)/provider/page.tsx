@@ -188,11 +188,11 @@ export default function ProviderTasksPage() {
                       </SelectContent>
                     </Select>
                     
-                    <Button className="w-full justify-start gap-2" variant="outline" asChild>
-                      <a href={`tel:${req.patientPhone || req.patient?.profile?.phone}`}>
+                    <a href={`tel:${req.patientPhone || req.patient?.profile?.phone}`} className="w-full">
+                      <Button className="w-full justify-start gap-2" variant="outline" type="button">
                         <Phone className="h-4 w-4" /> Contact {req.patient?.profile?.firstName || "Patient"}
-                      </a>
-                    </Button>
+                      </Button>
+                    </a>
                   </div>
                 </div>
               </CardContent>
