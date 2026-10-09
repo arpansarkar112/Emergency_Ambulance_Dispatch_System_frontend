@@ -3,6 +3,7 @@ import { User, Activity, CreditCard, LogOut, Ambulance, PlusCircle } from "lucid
 
 const routes = [
   { label: "My Bookings", icon: Activity, href: "/dashboard" },
+  { label: "Request Ambulance", icon: PlusCircle, href: "/dashboard/request" },
   { label: "Payments", icon: CreditCard, href: "/dashboard/payments" },
   { label: "Profile", icon: User, href: "/dashboard/profile" },
 ];
