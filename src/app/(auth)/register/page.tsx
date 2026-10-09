@@ -10,20 +10,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { signIn } from "next-auth/react";
 import { GoogleLogin } from "@react-oauth/google";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { api } from "@/lib/axios";
 import { useRouter } from "next/navigation";
-
-const registerSchema = z.object({
-  firstName: z.string().min(2, "First name is too short"),
-  lastName: z.string().min(2, "Last name is too short"),
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-});
-
-type RegisterFormValues = z.infer<typeof registerSchema>;
+import { api } from "@/lib/axios";
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
@@ -41,136 +29,160 @@ export default function RegisterPage() {
         redirect: false,
         idToken: credentialResponse.credential,
       });
+
       if (res?.error) {
         toast.error(res.error);
       } else {
-        toast.success("Account linked successfully!");
+        toast.success("Google login successful!");
         router.push("/dashboard");
       }
     } catch (error) {
-      toast.error("Google sign-up failed");
+      toast.error("Google login failed");
     } finally {
       setLoading(false);
     }
   };
 
-  // Fallback to standard state if form library isn't fully integrated, but we'll use react-hook-form format
-  // Actually, I'll just keep it simple since I need to use the actual hook
-  // Oh wait, I didn't import useForm correctly.
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await api.post("/auth/register", {
+        firstName,
+        lastName,
+        email,
+        password,
+        role,
+      });
+      
+      if (res.data.success) {
+        toast.success("Account created successfully!");
+        router.push("/login");
+      }
+    } catch (error: any) {
+      console.error("REGISTRATION ERROR:", error);
+      const apiError = error.response?.data;
+      let errorMessage = apiError?.message || "Registration failed. Please check your network.";
+      if (apiError?.errors && apiError.errors.length > 0) {
+        errorMessage = apiError.errors[0].message;
+      }
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="container relative min-h-screen flex flex-col items-center justify-center md:grid lg:max-w-none lg:grid-cols-2 lg:px-0">
-      <div className="relative hidden h-full flex-col bg-muted p-10 text-white lg:flex dark:border-r">
-        <div className="absolute inset-0 bg-slate-900" />
-        <div className="relative z-20 flex items-center text-lg font-medium gap-2">
-          <Ambulance className="h-6 w-6" />
-          CallAmbulance.
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50/50 p-4 py-12">
+      <Link href="/" className="flex items-center gap-2 mb-8 text-xl font-bold tracking-tight text-primary transition-opacity hover:opacity-80">
+        <Ambulance className="h-6 w-6" />
+        CallAmbulance.
+      </Link>
+      
+      <div className="w-full max-w-[450px] bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+        <div className="flex flex-col space-y-2 text-center mb-8">
+          <h1 className="text-2xl font-semibold tracking-tight">Create an account</h1>
+          <p className="text-sm text-muted-foreground">Enter your details to get started</p>
         </div>
-        <div className="relative z-20 mt-auto">
-          <blockquote className="space-y-2">
-            <p className="text-lg">
-              &ldquo;Join our network of healthcare providers and users to save lives efficiently.&rdquo;
-            </p>
-          </blockquote>
-        </div>
-      </div>
-      <div className="lg:p-8 w-full">
-        <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[400px]">
-          <div className="flex flex-col space-y-2 text-center">
-            <h1 className="text-2xl font-semibold tracking-tight">Create an account</h1>
-            <p className="text-sm text-muted-foreground">Enter your details below to create your account</p>
-          </div>
 
-          <form onSubmit={async (e) => {
-            e.preventDefault();
-            setLoading(true);
-            try {
-              const res = await api.post("/auth/register", {
-                firstName,
-                lastName,
-                email,
-                password,
-                role: role,
-              });
-              
-              if (res.data.success) {
-                toast.success("Account created successfully!");
-                router.push("/login");
-              }
-            } catch (error: any) {
-              console.error("REGISTRATION ERROR:", error);
-              const apiError = error.response?.data;
-              let errorMessage = apiError?.message || "Registration failed. Please check your network.";
-              if (apiError?.errors && apiError.errors.length > 0) {
-                errorMessage = apiError.errors[0].message;
-              }
-              toast.error(errorMessage);
-            } finally {
-              setLoading(false);
-            }
-          }}>
-            <div className="grid gap-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="first-name">First name</Label>
-                  <Input id="first-name" placeholder="Max" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="last-name">Last name</Label>
-                  <Input id="last-name" placeholder="Robinson" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" placeholder="m@example.com" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-              </div>
-              <div className="grid gap-2">
-                <Label>Account Role</Label>
-                <Select value={role} onValueChange={(val) => setRole(val || "PATIENT")}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select your role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PATIENT">Patient (Need Ambulance)</SelectItem>
-                    <SelectItem value="DRIVER">Driver (Provide Ambulance)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button className="w-full" type="submit" disabled={loading}>
-                {loading ? "Creating account..." : "Create account"}
-              </Button>
+        <form onSubmit={handleRegister} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="first-name">First name</Label>
+              <Input 
+                id="first-name" 
+                placeholder="Max" 
+                value={firstName} 
+                onChange={(e) => setFirstName(e.target.value)} 
+                required 
+                className="bg-gray-50/50"
+              />
             </div>
-          </form>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">
-                Or continue with
-              </span>
+            <div className="space-y-2">
+              <Label htmlFor="last-name">Last name</Label>
+              <Input 
+                id="last-name" 
+                placeholder="Robinson" 
+                value={lastName} 
+                onChange={(e) => setLastName(e.target.value)} 
+                required 
+                className="bg-gray-50/50"
+              />
             </div>
           </div>
-
-          <div className="flex justify-center w-full">
-            <GoogleLogin 
-              onSuccess={handleGoogleSuccess}
-              onError={() => toast.error("Google sign-up failed")}
+          
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input 
+              id="email" 
+              placeholder="name@example.com" 
+              type="email" 
+              value={email} 
+              onChange={(e) => setEmail(e.target.value)} 
+              required 
+              className="bg-gray-50/50"
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input 
+              id="password" 
+              type="password" 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)} 
+              required 
+              className="bg-gray-50/50"
             />
           </div>
 
-          <p className="px-8 text-center text-sm text-muted-foreground">
-            Already have an account?{" "}
-            <Link href="/login" className="underline underline-offset-4 hover:text-primary">
-              Log in
-            </Link>
-          </p>
+          <div className="space-y-2">
+            <Label>Account Role</Label>
+            <Select value={role} onValueChange={(val) => setRole(val || "PATIENT")}>
+              <SelectTrigger className="bg-gray-50/50">
+                <SelectValue placeholder="Select your role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PATIENT">Patient (Need Ambulance)</SelectItem>
+                <SelectItem value="DRIVER">Driver (Provide Ambulance)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Button className="w-full mt-6" type="submit" disabled={loading}>
+            {loading ? "Creating account..." : "Create account"}
+          </Button>
+        </form>
+
+        <div className="relative my-8">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-gray-100" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-white px-2 text-muted-foreground">Or continue with</span>
+          </div>
+        </div>
+
+        <div className="flex justify-center w-full">
+          <GoogleLogin
+            onSuccess={handleGoogleSuccess}
+            onError={() => toast.error("Google login failed")}
+            useOneTap={false}
+            shape="rectangular"
+            theme="outline"
+            text="continue_with"
+            size="large"
+            width="100%"
+          />
         </div>
       </div>
+
+      <p className="mt-8 text-center text-sm text-muted-foreground">
+        Already have an account?{" "}
+        <Link href="/login" className="font-semibold text-primary hover:underline transition-all">
+          Sign in
+        </Link>
+      </p>
     </div>
   );
 }
