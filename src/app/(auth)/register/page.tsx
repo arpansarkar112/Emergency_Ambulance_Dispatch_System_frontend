@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Ambulance } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -26,6 +27,7 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
+  const [role, setRole] = useState("PATIENT");
   const router = useRouter();
 
   const handleGoogleSuccess = async (credentialResponse: any) => {
@@ -90,7 +92,7 @@ export default function RegisterPage() {
                 lastName,
                 email,
                 password,
-                role: "user", // default role
+                role: role,
               });
               
               if (res.data.success) {
@@ -121,6 +123,18 @@ export default function RegisterPage() {
               <div className="grid gap-2">
                 <Label htmlFor="password">Password</Label>
                 <Input id="password" type="password" required />
+              </div>
+              <div className="grid gap-2">
+                <Label>Account Role</Label>
+                <Select value={role} onValueChange={setRole}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PATIENT">Patient (Need Ambulance)</SelectItem>
+                    <SelectItem value="DRIVER">Driver (Provide Ambulance)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <Button className="w-full" type="submit" disabled={loading}>
                 {loading ? "Creating account..." : "Create account"}
