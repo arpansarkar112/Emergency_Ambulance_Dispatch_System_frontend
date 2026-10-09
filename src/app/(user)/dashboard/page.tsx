@@ -74,11 +74,11 @@ export default function UserDashboard() {
                 </div>
                 <div className="flex items-center gap-2 mt-2 text-sm">
                   <MapPin className="h-4 w-4 text-muted-foreground" />
-                  Pickup: {req.pickupLocation}
+                  Pickup: {(req.pickupAddress || req.pickupLocation)}
                 </div>
                 <div className="flex items-center gap-2 mt-1 text-sm">
                   <MapPin className="h-4 w-4 text-muted-foreground" />
-                  Destination: {req.dropoffLocation}
+                  Destination: {(req.destinationAddress || req.dropoffLocation)}
                 </div>
               </CardContent>
               {req.status === "COMPLETED" && (

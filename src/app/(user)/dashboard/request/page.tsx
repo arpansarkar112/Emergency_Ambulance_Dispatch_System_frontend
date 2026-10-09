@@ -14,9 +14,10 @@ import { Ambulance, MapPin, Phone } from "lucide-react";
 
 export default function RequestAmbulancePage() {
   const router = useRouter();
+  const [patientPhone, setPatientPhone] = useState("");
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
-  const [urgency, setUrgency] = useState("HIGH");
+  const [priority, setPriority] = useState("HIGH");
 
   const requestMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -28,16 +29,22 @@ export default function RequestAmbulancePage() {
       router.push("/dashboard");
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to request ambulance");
+      const apiError = error.response?.data;
+      let errorMessage = apiError?.message || "Failed to request ambulance";
+      if (apiError?.errors && apiError.errors.length > 0) {
+        errorMessage = apiError.errors[0].message;
+      }
+      toast.error(errorMessage);
     }
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     requestMutation.mutate({
-      pickupLocation: pickup,
-      dropoffLocation: dropoff,
-      urgency
+      patientPhone,
+      pickupAddress: pickup,
+      destinationAddress: dropoff,
+      priority
     });
   };
 
@@ -57,6 +64,21 @@ export default function RequestAmbulancePage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="phone">Patient Phone Number</Label>
+                <div className="relative">
+                  <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    id="phone" 
+                    placeholder="e.g. +1 234 567 890" 
+                    className="pl-9"
+                    value={patientPhone}
+                    onChange={(e) => setPatientPhone(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="pickup">Pickup Location</Label>
                 <div className="relative">
@@ -88,9 +110,9 @@ export default function RequestAmbulancePage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="urgency">Urgency Level</Label>
-                <Select value={urgency} onValueChange={(val) => setUrgency(val || "HIGH")}>
-                  <SelectTrigger id="urgency">
+                <Label htmlFor="priority">Urgency Level</Label>
+                <Select value={priority} onValueChange={(val) => setPriority(val || "HIGH")}>
+                  <SelectTrigger id="priority">
                     <SelectValue placeholder="Select urgency" />
                   </SelectTrigger>
                   <SelectContent>
