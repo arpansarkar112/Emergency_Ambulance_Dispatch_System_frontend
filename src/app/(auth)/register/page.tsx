@@ -28,6 +28,10 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState("PATIENT");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const router = useRouter();
 
   const handleGoogleSuccess = async (credentialResponse: any) => {
@@ -80,13 +84,6 @@ export default function RegisterPage() {
             e.preventDefault();
             setLoading(true);
             try {
-              // We'll extract values manually since we aren't fully using react-hook-form standard controlled inputs here for brevity
-              const form = e.target as HTMLFormElement;
-              const firstName = (form.elements.namedItem("first-name") as HTMLInputElement).value;
-              const lastName = (form.elements.namedItem("last-name") as HTMLInputElement).value;
-              const email = (form.elements.namedItem("email") as HTMLInputElement).value;
-              const password = (form.elements.namedItem("password") as HTMLInputElement).value;
-
               const res = await api.post("/auth/register", {
                 firstName,
                 lastName,
@@ -109,24 +106,24 @@ export default function RegisterPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="first-name">First name</Label>
-                  <Input id="first-name" placeholder="Max" required />
+                  <Input id="first-name" placeholder="Max" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="last-name">Last name</Label>
-                  <Input id="last-name" placeholder="Robinson" required />
+                  <Input id="last-name" placeholder="Robinson" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
                 </div>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" placeholder="m@example.com" type="email" required />
+                <Input id="email" placeholder="m@example.com" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" required />
+                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
               </div>
               <div className="grid gap-2">
                 <Label>Account Role</Label>
-                <Select value={role} onValueChange={setRole}>
+                <Select value={role} onValueChange={(val) => setRole(val || "PATIENT")}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select your role" />
                   </SelectTrigger>
