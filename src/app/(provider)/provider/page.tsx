@@ -2,53 +2,127 @@
 
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Phone, CheckCircle2, Clock } from "lucide-react";
+import { MapPin, Phone, Clock, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getSession } from "next-auth/react";
 
 export default function ProviderTasksPage() {
-  const { data: requests, isLoading, refetch } = useQuery({
+  const { data: session } = useQuery({
+    queryKey: ['session'],
+    queryFn: async () => await getSession(),
+  });
+  
+  const userId = (session?.user as any)?.id;
+
+  const { data: requests, isLoading: loadingRequests, refetch: refetchRequests } = useQuery({
     queryKey: ['provider-requests'],
     queryFn: async () => {
       const res = await api.get('/requests/my-requests');
       return res.data.data;
-    }
+    },
+    enabled: !!userId,
   });
 
-  const updateStatusMutation = useMutation({
+  const { data: ambulances, isLoading: loadingAmbulances, refetch: refetchAmbulances } = useQuery({
+    queryKey: ['ambulances'],
+    queryFn: async () => {
+      const res = await api.get('/ambulances');
+      return res.data.data.ambulances;
+    },
+    enabled: !!userId,
+  });
+
+  const updateRequestMutation = useMutation({
     mutationFn: async ({ requestId, status }: { requestId: string, status: string }) => {
       const res = await api.patch('/requests/status', { requestId, status });
       return res.data;
     },
     onSuccess: () => {
-      toast.success("Status updated successfully!");
-      refetch();
+      toast.success("Task status updated successfully!");
+      refetchRequests();
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to update status");
+      toast.error(error.response?.data?.message || "Failed to update task status");
     }
   });
 
-  if (isLoading) {
-    return <div className="p-8">Loading your tasks...</div>;
+  const updateAmbulanceMutation = useMutation({
+    mutationFn: async ({ ambulanceId, status }: { ambulanceId: string, status: string }) => {
+      const res = await api.patch('/ambulances', { ambulanceId, status });
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success("Ambulance status updated!");
+      refetchAmbulances();
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to update ambulance");
+    }
+  });
+
+  if (loadingRequests || loadingAmbulances) {
+    return <div className="p-8">Loading your dashboard...</div>;
   }
 
   const activeRequests = Array.isArray(requests) ? requests : [];
+  const driverAmbulance = Array.isArray(ambulances) ? ambulances.find((amb: any) => amb.driver?.id === userId) : null;
+  const isOnline = driverAmbulance?.status === "AVAILABLE";
+
+  const toggleOnlineStatus = () => {
+    if (!driverAmbulance) return;
+    const newStatus = isOnline ? "BUSY" : "AVAILABLE";
+    updateAmbulanceMutation.mutate({ ambulanceId: driverAmbulance.id, status: newStatus });
+  };
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between space-y-4 md:space-y-0">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Driver Dashboard</h2>
-          <p className="text-muted-foreground mt-1">Manage your active and completed dispatches.</p>
+          <p className="text-muted-foreground mt-1">Manage your active dispatches and vehicle status.</p>
         </div>
-        <Badge variant="default" className="text-sm px-4 py-1.5 font-medium shadow-sm bg-emerald-600 hover:bg-emerald-700">Online & Available</Badge>
+        <div className="flex items-center gap-4">
+          {driverAmbulance ? (
+            <Button 
+              variant={isOnline ? "default" : "secondary"} 
+              className={isOnline ? "bg-emerald-600 hover:bg-emerald-700 w-32" : "w-32"}
+              onClick={toggleOnlineStatus}
+              disabled={updateAmbulanceMutation.isPending}
+            >
+              {updateAmbulanceMutation.isPending ? "Updating..." : (isOnline ? "Online" : "Offline")}
+            </Button>
+          ) : (
+            <Badge variant="outline" className="text-sm px-3 py-1">No Vehicle Assigned</Badge>
+          )}
+        </div>
       </div>
 
+      {driverAmbulance && (
+        <Card className="bg-gray-50/50 border-gray-100 shadow-sm mt-4">
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="p-3 bg-blue-100 text-blue-700 rounded-full">
+              <Truck className="h-6 w-6" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900">Your Vehicle: {driverAmbulance.vehicleNumber}</h3>
+              <p className="text-sm text-gray-600 capitalize">Type: {driverAmbulance.type.toLowerCase()}</p>
+            </div>
+            <div className="ml-auto text-right">
+              <p className="text-sm font-medium text-gray-900">Current Status</p>
+              <Badge variant={isOnline ? "outline" : "secondary"} className={isOnline ? "border-emerald-600 text-emerald-700 mt-1" : "mt-1"}>
+                {driverAmbulance.status}
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-6 mt-8">
+        <h3 className="text-xl font-semibold">Active Dispatches</h3>
         {activeRequests.length === 0 ? (
           <div className="text-center p-12 border border-dashed rounded-xl bg-gray-50/50">
             <h3 className="text-lg font-medium text-gray-900">No active requests</h3>
@@ -101,7 +175,7 @@ export default function ProviderTasksPage() {
                   <div className="flex flex-col justify-end gap-3 border-t md:border-t-0 md:border-l pt-4 md:pt-0 md:pl-6 border-gray-100">
                     <Select 
                       value={req.status} 
-                      onValueChange={(val) => updateStatusMutation.mutate({ requestId: req.id, status: val })}
+                      onValueChange={(val) => updateRequestMutation.mutate({ requestId: req.id, status: val })}
                       disabled={req.status === 'COMPLETED' || req.status === 'CANCELLED'}
                     >
                       <SelectTrigger className="w-full">
