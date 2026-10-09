@@ -89,7 +89,7 @@ export default function RequestAmbulancePage() {
 
               <div className="space-y-2">
                 <Label htmlFor="urgency">Urgency Level</Label>
-                <Select value={urgency} onValueChange={setUrgency}>
+                <Select value={urgency} onValueChange={(val) => setUrgency(val || "HIGH")}>
                   <SelectTrigger id="urgency">
                     <SelectValue placeholder="Select urgency" />
                   </SelectTrigger>
