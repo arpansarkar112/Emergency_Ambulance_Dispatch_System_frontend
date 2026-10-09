@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Ambulance } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { GoogleLogin } from "@react-oauth/google";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/axios";
@@ -22,6 +22,18 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const router = useRouter();
 
+  const routeUserBasedOnRole = async () => {
+    const session = await getSession();
+    const userRole = (session?.user as any)?.role || "PATIENT";
+    if (userRole === "ADMIN") {
+      router.push("/admin");
+    } else if (userRole === "DRIVER") {
+      router.push("/provider");
+    } else {
+      router.push("/dashboard");
+    }
+  };
+
   const handleGoogleSuccess = async (credentialResponse: any) => {
     setLoading(true);
     try {
@@ -34,7 +46,7 @@ export default function RegisterPage() {
         toast.error(res.error);
       } else {
         toast.success("Google login successful!");
-        router.push("/dashboard");
+        await routeUserBasedOnRole();
       }
     } catch (error) {
       toast.error("Google login failed");

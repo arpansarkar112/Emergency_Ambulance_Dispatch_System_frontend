@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Ambulance } from "lucide-react";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -16,6 +16,18 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  const routeUserBasedOnRole = async () => {
+    const session = await getSession();
+    const role = (session?.user as any)?.role || "PATIENT";
+    if (role === "ADMIN") {
+      router.push("/admin");
+    } else if (role === "DRIVER") {
+      router.push("/provider");
+    } else {
+      router.push("/dashboard");
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +43,7 @@ export default function LoginPage() {
         toast.error(res.error);
       } else {
         toast.success("Login successful!");
-        router.push("/dashboard");
+        await routeUserBasedOnRole();
       }
     } catch (error) {
       toast.error("Something went wrong");
@@ -52,7 +64,7 @@ export default function LoginPage() {
         toast.error(res.error);
       } else {
         toast.success("Google login successful!");
-        router.push("/dashboard");
+        await routeUserBasedOnRole();
       }
     } catch (error) {
       toast.error("Google login failed");
