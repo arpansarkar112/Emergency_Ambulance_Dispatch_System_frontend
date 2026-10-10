@@ -1,8 +1,12 @@
+"use client";
+
 import Link from "next/link";
-import { Ambulance, ListTodo, DollarSign, User, LogOut } from "lucide-react";
+import { Ambulance, ListTodo, DollarSign, User, LogOut, Truck } from "lucide-react";
+import { signOut } from "next-auth/react";
 
 const routes = [
   { label: "My Tasks", icon: ListTodo, href: "/provider" },
+  { label: "My Vehicles", icon: Truck, href: "/provider/vehicles" },
   { label: "Earnings", icon: DollarSign, href: "/provider/earnings" },
   { label: "Profile", icon: User, href: "/provider/profile" },
 ];
@@ -28,6 +32,13 @@ export function ProviderSidebar() {
               {route.label}
             </Link>
           ))}
+          <button
+            onClick={() => signOut({ callbackUrl: '/login' })}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-red-600 hover:bg-red-50 transition-all font-medium text-sm mt-2"
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </button>
         </nav>
       </div>
       <div className="mt-auto border-t border-gray-200 p-4">

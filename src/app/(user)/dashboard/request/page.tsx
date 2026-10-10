@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -14,6 +14,7 @@ import { Ambulance, MapPin, Phone } from "lucide-react";
 
 export default function RequestAmbulancePage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [patientPhone, setPatientPhone] = useState("");
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
@@ -24,8 +25,24 @@ export default function RequestAmbulancePage() {
       const res = await api.post('/requests', data);
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success("Ambulance requested successfully! A provider will be assigned shortly.");
+      if (data && data.data) {
+        // Optimistic update
+        queryClient.setQueryData(['my-requests'], (old: any) => {
+          if (!old) return [data.data];
+          return [data.data, ...old];
+        });
+        
+        // Save to localStorage because backend patient endpoint is broken
+        try {
+          const stored = localStorage.getItem('local_patient_requests');
+          let localRequests = stored ? JSON.parse(stored) : [];
+          localRequests.unshift(data.data);
+          localStorage.setItem('local_patient_requests', JSON.stringify(localRequests));
+        } catch(e) {}
+      }
+      queryClient.invalidateQueries({ queryKey: ['my-requests'] });
       router.push("/dashboard");
     },
     onError: (error: any) => {

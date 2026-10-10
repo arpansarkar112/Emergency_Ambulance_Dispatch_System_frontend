@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { User, Activity, CreditCard, LogOut, Ambulance, PlusCircle } from "lucide-react";
+import { signOut } from "next-auth/react";
 
 const routes = [
   { label: "My Bookings", icon: Activity, href: "/dashboard" },
@@ -29,6 +32,13 @@ export function UserSidebar() {
               {route.label}
             </Link>
           ))}
+          <button
+            onClick={() => signOut({ callbackUrl: '/login' })}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all font-medium text-sm mt-2"
+          >
+            <LogOut className="h-5 w-5" />
+            Logout
+          </button>
         </nav>
       </div>
       <div className="mt-auto border-t p-4 flex justify-center">

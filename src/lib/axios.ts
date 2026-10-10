@@ -8,23 +8,22 @@ export const api = axios.create({
   },
 });
 
-// Interceptor to attach token to requests
 api.interceptors.request.use(
   async (config) => {
-    // We only use getSession on the client-side.
     if (typeof window !== "undefined") {
       try {
         const session = await getSession();
-        if (session && (session as any).accessToken) {
-          config.headers.Authorization = `Bearer ${(session as any).accessToken}`;
+        const accessToken = (session?.user as { accessToken?: string } | undefined)?.accessToken;
+
+        if (accessToken) {
+          config.headers.Authorization = `Bearer ${accessToken}`;
         }
-      } catch (err) {
-        console.warn("Failed to fetch session for axios interceptor", err);
+      } catch (error) {
+        console.warn("Failed to fetch session for axios interceptor", error);
       }
     }
+
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
