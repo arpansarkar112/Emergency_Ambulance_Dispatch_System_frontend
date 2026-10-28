@@ -1,7 +1,7 @@
 "use client";
 
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, Ambulance } from "lucide-react";
+import { Menu } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -14,27 +14,21 @@ export function MobileMenu() {
         <Menu className="h-5 w-5" />
         <span className="sr-only">Toggle Menu</span>
       </SheetTrigger>
-      <SheetContent side="left" className="pr-0 border-r-0 w-[300px]">
+      <SheetContent side="left" className="pr-0 border-r-0 w-[280px]">
         <div className="flex flex-col gap-6 py-6 px-4">
           <Link
             href="/#hero"
-            className="flex items-center gap-2.5 font-bold text-xl tracking-tight mb-4"
+            className="font-medium text-xl tracking-tight mb-4"
             onClick={() => setOpen(false)}
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-600 text-white">
-              <Ambulance className="h-4 w-4" />
-            </div>
-            <span>MedDispatch Pro</span>
+            MedDispatch.
           </Link>
           <div className="flex flex-col gap-4">
             <Link href="/#about" className="text-base text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(false)}>
               About
             </Link>
-            <Link href="/#how-it-works" className="text-base text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(false)}>
-              How It Works
-            </Link>
             <Link href="/#services" className="text-base text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(false)}>
-              Services & Fleet
+              Services
             </Link>
             <Link href="/#pricing" className="text-base text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(false)}>
               Pricing
@@ -43,12 +37,12 @@ export function MobileMenu() {
               Contact
             </Link>
           </div>
-          <div className="flex flex-col gap-4 mt-6 pt-6 border-t border-border/40 w-4/5">
+          <div className="flex flex-col gap-4 mt-6 pt-6 border-t border-border/40 w-3/4">
             <Link href="/login" className="text-base text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(false)}>
-              Sign In
+              Sign in
             </Link>
-            <Link href="/register" className="text-base text-red-600 font-semibold transition-colors" onClick={() => setOpen(false)}>
-              Request Dispatch →
+            <Link href="/register" className="text-base text-foreground font-medium transition-colors" onClick={() => setOpen(false)}>
+              Get Started
             </Link>
           </div>
         </div>

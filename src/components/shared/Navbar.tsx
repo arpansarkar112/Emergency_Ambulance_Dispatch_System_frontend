@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MobileMenu } from "./MobileMenu";
-import { Ambulance, LayoutDashboard } from "lucide-react";
 import { useSession } from "next-auth/react";
 
 export function Navbar() {
@@ -14,32 +13,21 @@ export function Navbar() {
     role === "ADMIN" ? "/admin" : role === "DRIVER" ? "/provider" : "/dashboard";
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-background/90 backdrop-blur-md border-b border-border/60">
+    <header className="sticky top-0 z-50 w-full bg-background/80 backdrop-blur-md border-b border-border/40">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-8">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <MobileMenu />
-          <Link href="/#hero" className="flex items-center gap-2.5 font-bold text-lg tracking-tight text-foreground hover:opacity-90 transition-opacity">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-600 text-white shadow-sm">
-              <Ambulance className="h-5 w-5" />
-            </div>
-            <div className="flex flex-col leading-none">
-              <span className="text-base font-bold tracking-tight">MedDispatch Pro</span>
-              <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-                Emergency Response
-              </span>
-            </div>
+          <Link href="/#hero" className="font-medium text-lg tracking-tight hover:opacity-80 transition-opacity">
+            MedDispatch.
           </Link>
         </div>
         
-        <nav className="hidden md:flex gap-7 items-center text-sm font-medium">
+        <nav className="hidden md:flex gap-8 items-center text-sm">
           <Link href="/#about" className="text-muted-foreground hover:text-foreground transition-colors">
             About
           </Link>
-          <Link href="/#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors">
-            How It Works
-          </Link>
           <Link href="/#services" className="text-muted-foreground hover:text-foreground transition-colors">
-            Services & Fleet
+            Services
           </Link>
           <Link href="/#pricing" className="text-muted-foreground hover:text-foreground transition-colors">
             Pricing
@@ -49,22 +37,21 @@ export function Navbar() {
           </Link>
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           {session?.user ? (
             <Link href={dashboardHref}>
-              <Button variant="default" className="rounded-full px-5 gap-2 bg-red-600 hover:bg-red-700 text-white">
-                <LayoutDashboard className="h-4 w-4" />
+              <Button variant="default" className="rounded-full px-6 h-9 text-sm">
                 Dashboard
               </Button>
             </Link>
           ) : (
             <>
-              <Link href="/login" className="hidden sm:inline-block text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-2">
-                Sign In
+              <Link href="/login" className="hidden sm:inline-block text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Sign in
               </Link>
               <Link href="/register">
-                <Button variant="default" className="rounded-full px-6 bg-red-600 hover:bg-red-700 text-white">
-                  Request Dispatch
+                <Button variant="default" className="rounded-full px-6 h-9 text-sm">
+                  Get Started
                 </Button>
               </Link>
             </>
