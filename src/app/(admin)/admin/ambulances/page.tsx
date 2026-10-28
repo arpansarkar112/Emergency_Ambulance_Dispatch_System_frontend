@@ -17,14 +17,15 @@ export default function AdminAmbulancesPage() {
   const [open, setOpen] = useState(false);
   const [formData, setFormData] = useState({
     vehicleNumber: "",
-    vehicleType: "",
+    type: "ICU",
+    currentAddress: "",
     driverId: ""
   });
 
   const { data: drivers } = useQuery({
     queryKey: ['admin-drivers'],
     queryFn: async () => {
-      const res = await api.get('/users');
+      const res = await api.get('/users?role=DRIVER&limit=100');
       const allUsers = res.data.data?.users || res.data.data || [];
       return (Array.isArray(allUsers) ? allUsers : []).filter((u: any) => u.role === 'DRIVER');
     }
@@ -33,47 +34,58 @@ export default function AdminAmbulancesPage() {
   const { data: ambulances, isPending } = useQuery({
     queryKey: ['admin-ambulances'],
     queryFn: async () => {
-      const res = await api.get('/ambulances');
+      const res = await api.get('/ambulances?limit=100');
       const data = res.data.data;
       return data?.ambulances || data?.data || (Array.isArray(data) ? data : []);
     }
   });
 
+  const formatDriverLabel = (driver: any) => {
+    if (!driver) return "Unassigned";
+    const fullName = [driver.profile?.firstName, driver.profile?.lastName].filter(Boolean).join(" ");
+    return fullName ? `${fullName} (${driver.email})` : driver.email;
+  };
+
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const payload: any = { vehicleNumber: data.vehicleNumber, vehicleType: data.vehicleType };
-      if (data.driverId) payload.driverId = data.driverId;
-      
-      let createdAmb = null;
-      try {
-        const res = await api.post('/ambulances', payload);
-        createdAmb = res.data.data || res.data;
-      } catch (err: any) {
-        if (err.response?.status === 404 || err.response?.status === 400 || err.response?.status === 403) {
-          const res = await api.post('/admin/ambulances', payload);
-          createdAmb = res.data.data || res.data;
-        } else {
-          throw err;
-        }
+      const payload: any = {
+        vehicleNumber: data.vehicleNumber.trim(),
+        type: data.type || "BASIC",
+        currentAddress: data.currentAddress.trim() || "Central Station",
+      };
+      if (data.driverId && data.driverId !== "UNASSIGNED") {
+        payload.driverId = data.driverId;
       }
-      
-      // If a driver was selected but the backend didn't link it during POST, try PATCHing it
-      if (payload.driverId && createdAmb && createdAmb.id && !createdAmb.driverId && !createdAmb.driver) {
-        try {
-          await api.patch(`/ambulances/${createdAmb.id}`, { driverId: payload.driverId });
-        } catch(e) {}
-      }
-      
-      return createdAmb;
+      const res = await api.post('/ambulances', payload);
+      return res.data.data || res.data;
     },
     onSuccess: () => {
       toast.success("Ambulance created successfully");
       setOpen(false);
-      setFormData({ vehicleNumber: "", vehicleType: "" });
+      setFormData({ vehicleNumber: "", type: "ICU", currentAddress: "", driverId: "" });
       queryClient.invalidateQueries({ queryKey: ['admin-ambulances'] });
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to create ambulance");
+      const apiErr = error.response?.data;
+      let msg = apiErr?.message || "Failed to create ambulance";
+      if (apiErr?.errors && apiErr.errors.length > 0) {
+        msg += `: ${apiErr.errors.map((e: any) => e.message || e.msg).join(", ")}`;
+      }
+      toast.error(msg);
+    }
+  });
+
+  const updateAmbulanceMutation = useMutation({
+    mutationFn: async (payload: { ambulanceId: string; driverId?: string | null; status?: string; type?: string }) => {
+      const res = await api.patch('/ambulances', payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success("Ambulance updated successfully");
+      queryClient.invalidateQueries({ queryKey: ['admin-ambulances'] });
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to update ambulance");
     }
   });
 
@@ -82,11 +94,17 @@ export default function AdminAmbulancesPage() {
   }
 
   const allAmbulances = Array.isArray(ambulances) ? ambulances : [];
+  const driverList = Array.isArray(drivers) ? drivers : [];
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight">Ambulances Management</h2>
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Ambulances Management</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Create ambulances, set vehicle criticality types (ICU, BASIC, PEDIATRIC), and assign them to individual drivers.
+          </p>
+        </div>
         
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger className={buttonVariants()}>
@@ -110,37 +128,58 @@ export default function AdminAmbulancesPage() {
                   value={formData.vehicleNumber}
                   onChange={e => setFormData({ ...formData, vehicleNumber: e.target.value })}
                   required
-                  placeholder="e.g. XY-1234"
+                  placeholder="e.g. DHA-11-2233"
                 />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="vehicleType">Vehicle Type</Label>
-                <Input 
-                  id="vehicleType" 
-                  value={formData.vehicleType}
-                  onChange={e => setFormData({ ...formData, vehicleType: e.target.value })}
-                  required
-                  placeholder="e.g. ALS, BLS, ICU"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="driverId">Assign Driver (Optional)</Label>
+                <Label htmlFor="type">Vehicle Type (Criticality Tier)</Label>
                 <Select 
-                  value={formData.driverId} 
-                  onValueChange={(val) => setFormData({ ...formData, driverId: val })}
+                  value={formData.type} 
+                  onValueChange={(val) => setFormData({ ...formData, type: val || "ICU" })}
+                >
+                  <SelectTrigger id="type">
+                    <SelectValue placeholder="Select Vehicle Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ICU">ICU (Critical & High Priority)</SelectItem>
+                    <SelectItem value="BASIC">BASIC (Low & Medium Priority)</SelectItem>
+                    <SelectItem value="PEDIATRIC">PEDIATRIC (Specialized Care)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="currentAddress">Current Address / Station</Label>
+                <Input 
+                  id="currentAddress" 
+                  value={formData.currentAddress}
+                  onChange={e => setFormData({ ...formData, currentAddress: e.target.value })}
+                  required
+                  placeholder="e.g. Central Medical Station"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="driverId">Assign Driver</Label>
+                <Select 
+                  value={formData.driverId || "UNASSIGNED"} 
+                  onValueChange={(val) => setFormData({ ...formData, driverId: val === "UNASSIGNED" ? "" : (val || "") })}
                 >
                   <SelectTrigger id="driverId">
                     <SelectValue placeholder="Select a Driver" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(drivers || []).map((driver: any) => (
+                    <SelectItem value="UNASSIGNED">-- Unassigned --</SelectItem>
+                    {driverList.map((driver: any) => (
                       <SelectItem key={driver.id} value={driver.id}>
-                        {driver.name} ({driver.email})
+                        {formatDriverLabel(driver)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+
               <Button type="submit" className="w-full" disabled={createMutation.isPending}>
                 {createMutation.isPending ? "Creating..." : "Create Ambulance"}
               </Button>
@@ -155,6 +194,7 @@ export default function AdminAmbulancesPage() {
             <TableRow>
               <TableHead>Vehicle Number</TableHead>
               <TableHead>Type</TableHead>
+              <TableHead>Station / Address</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Driver Assigned</TableHead>
             </TableRow>
@@ -162,26 +202,63 @@ export default function AdminAmbulancesPage() {
           <TableBody>
             {allAmbulances.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                  No ambulances found.
+                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  No ambulances found. Click &quot;+ Add Ambulance&quot; to register one.
                 </TableCell>
               </TableRow>
             ) : (
               allAmbulances.map((amb: any) => (
                 <TableRow key={amb.id}>
                   <TableCell className="font-medium">{amb.vehicleNumber}</TableCell>
-                  <TableCell>{amb.vehicleType}</TableCell>
                   <TableCell>
-                    <Badge variant={amb.status === 'AVAILABLE' ? 'default' : 'secondary'} className={amb.status === 'AVAILABLE' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}>
-                      {amb.status || 'AVAILABLE'}
+                    <Badge variant={amb.type === "ICU" ? "destructive" : "secondary"}>
+                      {amb.type || amb.vehicleType || "BASIC"}
                     </Badge>
                   </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {amb.currentAddress || "Central Station"}
+                  </TableCell>
                   <TableCell>
-                    {amb.driver ? (
-                      <span className="text-sm">{amb.driver.email}</span>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">Unassigned</span>
-                    )}
+                    <Select
+                      value={amb.status || "AVAILABLE"}
+                      onValueChange={(val) => {
+                        if (val) updateAmbulanceMutation.mutate({ ambulanceId: amb.id, status: val });
+                      }}
+                      disabled={updateAmbulanceMutation.isPending}
+                    >
+                      <SelectTrigger className="w-[145px] h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="AVAILABLE">AVAILABLE</SelectItem>
+                        <SelectItem value="BUSY">BUSY</SelectItem>
+                        <SelectItem value="MAINTENANCE">MAINTENANCE</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={amb.driverId || amb.driver?.id || "UNASSIGNED"}
+                      onValueChange={(val) => {
+                        updateAmbulanceMutation.mutate({
+                          ambulanceId: amb.id,
+                          driverId: val === "UNASSIGNED" ? "" : (val || "")
+                        });
+                      }}
+                      disabled={updateAmbulanceMutation.isPending}
+                    >
+                      <SelectTrigger className="w-[240px] h-8 text-xs">
+                        <SelectValue placeholder="Assign a Driver" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="UNASSIGNED">-- Unassigned --</SelectItem>
+                        {driverList.map((driver: any) => (
+                          <SelectItem key={driver.id} value={driver.id}>
+                            {formatDriverLabel(driver)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                 </TableRow>
               ))

@@ -12,67 +12,24 @@ export default function AdminUsersPage() {
   const { data: users, isPending } = useQuery({
     queryKey: ['admin-users'],
     queryFn: async () => {
-      const res = await api.get('/users');
+      const res = await api.get('/users?limit=100');
       const data = res.data.data;
       return data?.users || data?.data || (Array.isArray(data) ? data : []);
     }
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string, data: any }) => {
-      // Extensive fallback chain for updating roles since the specific endpoint is undocumented
-      const endpoints = [
-        { method: 'patch', url: `/users/${id}/role`, payload: data },
-        { method: 'patch', url: `/admin/users/${id}/role`, payload: data },
-        { method: 'patch', url: `/users/${id}`, payload: data },
-        { method: 'patch', url: `/admin/users/${id}`, payload: data },
-        { method: 'patch', url: `/admin/users/role`, payload: { userId: id, ...data } },
-        { method: 'post', url: `/admin/users/role`, payload: { userId: id, ...data } },
-        { method: 'patch', url: `/admin/users/change-role`, payload: { userId: id, ...data } },
-        { method: 'post', url: `/admin/users/change-role`, payload: { userId: id, ...data } },
-        { method: 'put', url: `/users/${id}`, payload: data },
-        { method: 'put', url: `/admin/users/${id}`, payload: data }
-      ];
-
-      let lastError = null;
-
-      for (const ep of endpoints) {
-        try {
-          // @ts-ignore
-          const res = await api[ep.method](ep.url, ep.payload);
-          return res.data;
-        } catch (err: any) {
-          lastError = err;
-          // If it's a 404 (Not Found) or 405 (Method Not Allowed), continue to next fallback
-          if (err.response?.status === 404 || err.response?.status === 405 || err.response?.status === 400) {
-            continue;
-          }
-          // If we got a 403 or 500, we might want to stop, but let's aggressively try all
-        }
-      }
-      
-      throw lastError;
-    },
-    onMutate: async ({ id, data }) => {
-      await queryClient.cancelQueries({ queryKey: ['admin-users'] });
-      const previousUsers = queryClient.getQueryData(['admin-users']);
-      
-      queryClient.setQueryData(['admin-users'], (old: any) => {
-        if (!old) return old;
-        return old.map((u: any) => u.id === id ? { ...u, ...data } : u);
-      });
-      
-      return { previousUsers };
+    mutationFn: async ({ id, role }: { id: string; role: string }) => {
+      const res = await api.patch('/admin/users/role', { userId: id, role });
+      return res.data;
     },
     onSuccess: () => {
       toast.success("User role updated successfully");
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-drivers'] });
     },
-    onError: (error: any, variables, context) => {
+    onError: (error: any) => {
       toast.error(error.response?.data?.message || "Failed to update user role");
-      if (context?.previousUsers) {
-        queryClient.setQueryData(['admin-users'], context.previousUsers);
-      }
     }
   });
 
@@ -103,7 +60,9 @@ export default function AdminUsersPage() {
               </TableRow>
             ) : (
               allUsers.map((user: any) => {
-                const name = user.profile?.firstName ? `${user.profile.firstName} ${user.profile.lastName || ''}` : 'No Profile';
+                const name = user.profile?.firstName
+                  ? `${user.profile.firstName} ${user.profile.lastName || ''}`.trim()
+                  : 'No Profile';
                 
                 return (
                   <TableRow key={user.id}>
@@ -115,7 +74,10 @@ export default function AdminUsersPage() {
                       ) : (
                         <Select 
                           value={user.role} 
-                          onValueChange={(val) => updateMutation.mutate({ id: user.id, data: { role: val } })}
+                          onValueChange={(val) => {
+                            if (val) updateMutation.mutate({ id: user.id, role: val });
+                          }}
+                          disabled={updateMutation.isPending}
                         >
                           <SelectTrigger className="w-[130px] h-8 text-xs">
                             <SelectValue />

@@ -25,23 +25,8 @@ export default function RequestAmbulancePage() {
       const res = await api.post('/requests', data);
       return res.data;
     },
-    onSuccess: (data) => {
-      toast.success("Ambulance requested successfully! A provider will be assigned shortly.");
-      if (data && data.data) {
-        // Optimistic update
-        queryClient.setQueryData(['my-requests'], (old: any) => {
-          if (!old) return [data.data];
-          return [data.data, ...old];
-        });
-        
-        // Save to localStorage because backend patient endpoint is broken
-        try {
-          const stored = localStorage.getItem('local_patient_requests');
-          let localRequests = stored ? JSON.parse(stored) : [];
-          localRequests.unshift(data.data);
-          localStorage.setItem('local_patient_requests', JSON.stringify(localRequests));
-        } catch(e) {}
-      }
+    onSuccess: () => {
+      toast.success("Emergency request submitted! An admin will allocate an ambulance shortly.");
       queryClient.invalidateQueries({ queryKey: ['my-requests'] });
       router.push("/dashboard");
     },
@@ -127,16 +112,16 @@ export default function RequestAmbulancePage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="priority">Urgency Level</Label>
+                <Label htmlFor="priority">Criticality / Urgency Level</Label>
                 <Select value={priority} onValueChange={(val) => setPriority(val || "HIGH")}>
                   <SelectTrigger id="priority">
                     <SelectValue placeholder="Select urgency" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="CRITICAL">Critical (Life-threatening)</SelectItem>
-                    <SelectItem value="HIGH">High (Urgent care needed)</SelectItem>
-                    <SelectItem value="MEDIUM">Medium (Non-life threatening)</SelectItem>
-                    <SelectItem value="LOW">Low (Routine transport)</SelectItem>
+                    <SelectItem value="CRITICAL">Critical (Life-threatening — ICU Unit)</SelectItem>
+                    <SelectItem value="HIGH">High (Urgent care needed — ICU Unit)</SelectItem>
+                    <SelectItem value="MEDIUM">Medium (Non-life threatening — Basic Unit)</SelectItem>
+                    <SelectItem value="LOW">Low (Routine transport — Basic Unit)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -148,7 +133,7 @@ export default function RequestAmbulancePage() {
                 disabled={requestMutation.isPending}
               >
                 <Ambulance className="mr-2 h-5 w-5" />
-                {requestMutation.isPending ? "Dispatching..." : "Request"}
+                {requestMutation.isPending ? "Dispatching..." : "Request Emergency Ambulance"}
               </Button>
             </form>
           </CardContent>
@@ -166,7 +151,7 @@ export default function RequestAmbulancePage() {
               If this is a life-threatening emergency and the platform is unresponsive, please immediately dial your local emergency number (e.g., 911).
             </p>
             <p>
-              By clicking "Request", our system will automatically ping all available units within a 5-mile radius of your pickup location.
+              Once you submit your request, an administrator will allocate an ambulance based on your criticality level, and your assigned driver will update your trip status in real time.
             </p>
           </CardContent>
         </Card>
