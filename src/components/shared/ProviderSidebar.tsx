@@ -33,7 +33,10 @@ export function ProviderSidebar() {
             </Link>
           ))}
           <button
-            onClick={() => signOut({ callbackUrl: '/login' })}
+            onClick={async () => {
+              await signOut({ redirect: false });
+              window.location.href = "/login";
+            }}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-red-600 hover:bg-red-50 transition-all font-medium text-sm mt-2"
           >
             <LogOut className="h-4 w-4" />

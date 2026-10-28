@@ -2,6 +2,17 @@ import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import axios from "axios";
 
+const PROD_FRONTEND_URL = "https://emergency-ambulance-dispatch-system-iota.vercel.app";
+
+// Ensure NEXTAUTH_URL never points to localhost when deployed on Vercel/production
+if (
+  (process.env.VERCEL || process.env.NODE_ENV === "production") &&
+  (!process.env.NEXTAUTH_URL || process.env.NEXTAUTH_URL.includes("localhost"))
+) {
+  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || PROD_FRONTEND_URL;
+  process.env.NEXTAUTH_URL = host.startsWith("http") ? host : `https://${host}`;
+}
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://emergency-ambulance-dispatch-system-seven.vercel.app/api/v1";
 
 export const authOptions: NextAuthOptions = {
@@ -73,6 +84,17 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).id = token.id;
       }
       return session;
+    },
+    async redirect({ url, baseUrl }) {
+      const isProd = Boolean(process.env.VERCEL || process.env.NODE_ENV === "production");
+      const effectiveBase =
+        isProd && baseUrl.includes("localhost") ? PROD_FRONTEND_URL : baseUrl;
+
+      if (url.startsWith("/")) return `${effectiveBase}${url}`;
+      if (isProd && url.includes("localhost")) {
+        return url.replace(/^https?:\/\/localhost:\d+/, effectiveBase);
+      }
+      return url;
     }
   },
   pages: {
