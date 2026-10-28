@@ -97,13 +97,12 @@ export default function AdminRequestsPage() {
     return "BASIC";
   };
 
-  const getSortedAmbulancesForRequest = (priority: string) => {
+  // Strictly return only ambulances matching the recommended criticality type
+  const getMatchingAmbulancesForRequest = (priority: string) => {
     const recType = getRecommendedType(priority);
-    return [...dispatchableAmbulances].sort((a, b) => {
-      const aMatch = (a.type || a.vehicleType) === recType ? 1 : 0;
-      const bMatch = (b.type || b.vehicleType) === recType ? 1 : 0;
-      return bMatch - aMatch;
-    });
+    return dispatchableAmbulances.filter(
+      (a: any) => (a.type || a.vehicleType || "BASIC") === recType
+    );
   };
 
   return (
@@ -153,7 +152,7 @@ export default function AdminRequestsPage() {
         ) : (
           allRequests.map((req: any) => {
             const recType = getRecommendedType(req.priority);
-            const sortedAmbulances = getSortedAmbulancesForRequest(req.priority);
+            const matchingAmbulances = getMatchingAmbulancesForRequest(req.priority);
             const assignedAmb = req.ambulance || req.dispatch?.ambulance;
             const assignedDriver = req.driver || req.dispatch?.driver;
             const payment = req.payment || (Array.isArray(req.payments) ? req.payments[0] : null);
@@ -172,7 +171,7 @@ export default function AdminRequestsPage() {
                         Criticality: {req.priority}
                       </Badge>
                       <Badge variant="outline" className="text-xs">
-                        Recommended Unit: {recType}
+                        Required Unit: {recType}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
@@ -219,36 +218,35 @@ export default function AdminRequestsPage() {
                     {req.status === "PENDING" ? (
                       <div className="flex flex-col items-end gap-1.5">
                         <Select 
-                          disabled={assignMutation.isPending || sortedAmbulances.length === 0}
+                          disabled={assignMutation.isPending || matchingAmbulances.length === 0}
                           onValueChange={(val: any) => {
                             if (!val) return;
                             setAssigningId(req.id);
                             assignMutation.mutate({ requestId: req.id, ambulanceId: String(val) });
                           }}
                         >
-                          <SelectTrigger className="w-[280px]">
+                          <SelectTrigger className="w-[290px]">
                             <SelectValue placeholder={
-                              sortedAmbulances.length === 0 
-                                ? "No available ambulances with driver" 
-                                : `Allocate Ambulance (Rec: ${recType})`
+                              matchingAmbulances.length === 0 
+                                ? `No available ${recType} ambulances with driver` 
+                                : `Allocate ${recType} Ambulance`
                             } />
                           </SelectTrigger>
                           <SelectContent>
-                            {sortedAmbulances.map((amb: any) => {
+                            {matchingAmbulances.map((amb: any) => {
                               const ambType = amb.type || amb.vehicleType || "BASIC";
-                              const isRec = ambType === recType;
                               const driverEmail = amb.driver?.email || "Driver assigned";
                               return (
                                 <SelectItem key={amb.id} value={amb.id}>
-                                  {isRec ? "★ " : ""}{amb.vehicleNumber} [{ambType}] — {driverEmail}
+                                  {amb.vehicleNumber} [{ambType}] — {driverEmail}
                                 </SelectItem>
                               );
                             })}
                           </SelectContent>
                         </Select>
-                        {sortedAmbulances.length === 0 && (
+                        {matchingAmbulances.length === 0 && (
                           <Link href="/admin/ambulances" className="text-xs text-primary underline">
-                            Go to Ambulances to create/assign a driver →
+                            Create or assign a driver to an available {recType} ambulance →
                           </Link>
                         )}
                         {assigningId === req.id && (

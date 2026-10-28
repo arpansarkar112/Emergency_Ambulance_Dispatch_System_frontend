@@ -211,9 +211,22 @@ export default function AdminAmbulancesPage() {
                 <TableRow key={amb.id}>
                   <TableCell className="font-medium">{amb.vehicleNumber}</TableCell>
                   <TableCell>
-                    <Badge variant={amb.type === "ICU" ? "destructive" : "secondary"}>
-                      {amb.type || amb.vehicleType || "BASIC"}
-                    </Badge>
+                    <Select
+                      value={amb.type || amb.vehicleType || "BASIC"}
+                      onValueChange={(val) => {
+                        if (val) updateAmbulanceMutation.mutate({ ambulanceId: amb.id, type: val });
+                      }}
+                      disabled={updateAmbulanceMutation.isPending}
+                    >
+                      <SelectTrigger className="w-[130px] h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ICU">ICU</SelectItem>
+                        <SelectItem value="BASIC">BASIC</SelectItem>
+                        <SelectItem value="PEDIATRIC">PEDIATRIC</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {amb.currentAddress || "Central Station"}
