@@ -1,7 +1,7 @@
 "use client";
 
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu } from "lucide-react";
+import { Menu, Ambulance } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -15,19 +15,41 @@ export function MobileMenu() {
         <span className="sr-only">Toggle Menu</span>
       </SheetTrigger>
       <SheetContent side="left" className="pr-0 border-r-0 w-[300px]">
-        <div className="flex flex-col gap-6 py-6 px-2">
-          <Link href="/" className="font-medium text-xl tracking-tight mb-4" onClick={() => setOpen(false)}>
-            CallAmbulance.
+        <div className="flex flex-col gap-6 py-6 px-4">
+          <Link
+            href="/#hero"
+            className="flex items-center gap-2.5 font-bold text-xl tracking-tight mb-4"
+            onClick={() => setOpen(false)}
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-600 text-white">
+              <Ambulance className="h-4 w-4" />
+            </div>
+            <span>MedDispatch Pro</span>
           </Link>
           <div className="flex flex-col gap-4">
-            <Link href="/about" className="text-lg text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(false)}>About</Link>
-            <Link href="/services" className="text-lg text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(false)}>Services</Link>
-            <Link href="/pricing" className="text-lg text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(false)}>Pricing</Link>
-            <Link href="/contact" className="text-lg text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(false)}>Contact</Link>
+            <Link href="/#about" className="text-base text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(false)}>
+              About
+            </Link>
+            <Link href="/#how-it-works" className="text-base text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(false)}>
+              How It Works
+            </Link>
+            <Link href="/#services" className="text-base text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(false)}>
+              Services & Fleet
+            </Link>
+            <Link href="/#pricing" className="text-base text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(false)}>
+              Pricing
+            </Link>
+            <Link href="/#contact" className="text-base text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(false)}>
+              Contact
+            </Link>
           </div>
-          <div className="flex flex-col gap-4 mt-8 pt-8 border-t border-border/40 w-3/4">
-            <Link href="/login" className="text-lg text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(false)}>Sign in</Link>
-            <Link href="/register" className="text-lg text-foreground font-medium transition-colors" onClick={() => setOpen(false)}>Get Started</Link>
+          <div className="flex flex-col gap-4 mt-6 pt-6 border-t border-border/40 w-4/5">
+            <Link href="/login" className="text-base text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(false)}>
+              Sign In
+            </Link>
+            <Link href="/register" className="text-base text-red-600 font-semibold transition-colors" onClick={() => setOpen(false)}>
+              Request Dispatch →
+            </Link>
           </div>
         </div>
       </SheetContent>

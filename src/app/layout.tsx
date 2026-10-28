@@ -10,8 +10,8 @@ import { GoogleOAuthProvider } from "@react-oauth/google";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "CallAmbulance",
-  description: "Minimalist emergency response platform.",
+  title: "MedDispatch Pro | Emergency Ambulance & Critical Care Dispatch System",
+  description: "Next-generation emergency medical dispatch platform connecting patients, hospital administrators, and ambulance fleets in real time.",
 };
 
 export default function RootLayout({
@@ -20,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="scroll-smooth" suppressHydrationWarning>
       <body className={`${inter.className} antialiased min-h-screen flex flex-col`} suppressHydrationWarning>
         <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ""}>
           <AuthProvider>

@@ -43,8 +43,8 @@ export function ProviderSidebar() {
       </div>
       <div className="mt-auto border-t border-gray-200 p-4">
         <Link href="/" className="flex items-center gap-2 font-bold text-primary transition-opacity hover:opacity-80">
-          <Ambulance className="h-6 w-6" />
-          CallAmbulance.
+          <Ambulance className="h-6 w-6 text-red-600" />
+          MedDispatch Pro
         </Link>
       </div>
     </div>
