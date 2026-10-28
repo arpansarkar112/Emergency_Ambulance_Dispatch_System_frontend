@@ -21,7 +21,7 @@ export function MobileMenu() {
             className="font-medium text-xl tracking-tight mb-4"
             onClick={() => setOpen(false)}
           >
-            MedDispatch.
+            CallAmbulance.
           </Link>
           <div className="flex flex-col gap-4">
             <Link href="/#about" className="text-base text-muted-foreground hover:text-foreground transition-colors" onClick={() => setOpen(false)}>

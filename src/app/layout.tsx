@@ -10,8 +10,8 @@ import { GoogleOAuthProvider } from "@react-oauth/google";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "MedDispatch Pro | Emergency Ambulance & Critical Care Dispatch System",
-  description: "Next-generation emergency medical dispatch platform connecting patients, hospital administrators, and ambulance fleets in real time.",
+  title: "CallAmbulance",
+  description: "Minimalist emergency response platform.",
 };
 
 export default function RootLayout({

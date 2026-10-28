@@ -42,9 +42,9 @@ export function AdminSidebar() {
         </nav>
       </div>
       <div className="mt-auto border-t p-4 flex justify-center">
-        <Link href="/" className="flex items-center gap-2 font-bold text-lg tracking-tight hover:opacity-80 transition-opacity text-primary">
-          <Ambulance className="h-6 w-6 text-red-600" />
-          MedDispatch Pro
+        <Link href="/" className="flex items-center gap-2 font-medium text-lg tracking-tight hover:opacity-80 transition-opacity text-primary">
+          <Ambulance className="h-6 w-6" />
+          CallAmbulance.
         </Link>
       </div>
     </div>

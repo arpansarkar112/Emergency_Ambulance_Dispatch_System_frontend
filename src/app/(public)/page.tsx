@@ -14,7 +14,7 @@ export default function HomePage() {
             24/7 Emergency Medical Dispatch
           </span>
           <h1 className="text-4xl font-medium tracking-tight sm:text-6xl leading-tight">
-            Rapid medical response, simplified.
+            Rapid medical response, callAmbulance
           </h1>
           <p className="max-w-xl text-muted-foreground md:text-lg font-light leading-relaxed">
             Connecting patients, dispatch coordinators, and certified ambulance units in real time when every second counts.
@@ -46,7 +46,7 @@ export default function HomePage() {
               Built to remove friction between emergency calls and hospital arrival.
             </h2>
             <p className="text-muted-foreground font-light leading-relaxed max-w-2xl">
-              MedDispatch streamlines triage, unit allocation, and live driver tracking into one calm, unified system—matching critical emergencies to ICU units and routine transfers to Basic Life Support.
+              CallAmbulance streamlines triage, unit allocation, and live driver tracking into one calm, unified system—matching critical emergencies to ICU units and routine transfers to Basic Life Support.
             </p>
           </div>
 
@@ -167,7 +167,7 @@ export default function HomePage() {
               Need assistance or fleet access?
             </h2>
             <p className="text-sm text-muted-foreground font-light">
-              dispatch@meddispatch.com &nbsp;•&nbsp; 1-800-MED-911 (24/7 Command Desk)
+              hello@callambulance.com &nbsp;•&nbsp; 1-800-AMBULANCE (24/7 Command Desk)
             </p>
           </div>
 

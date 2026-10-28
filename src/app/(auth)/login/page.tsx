@@ -76,8 +76,8 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50/50 p-4">
       <Link href="/" className="flex items-center gap-2 mb-8 text-xl font-bold tracking-tight text-primary transition-opacity hover:opacity-80">
-        <Ambulance className="h-6 w-6 text-red-600" />
-        MedDispatch Pro
+        <Ambulance className="h-6 w-6" />
+        CallAmbulance.
       </Link>
       
       <div className="w-full max-w-[400px] bg-white rounded-2xl shadow-sm border border-gray-100 p-8">

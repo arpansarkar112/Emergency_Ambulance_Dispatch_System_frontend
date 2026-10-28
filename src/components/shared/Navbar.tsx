@@ -17,8 +17,8 @@ export function Navbar() {
       <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-8">
         <div className="flex items-center gap-2">
           <MobileMenu />
-          <Link href="/#hero" className="font-medium text-lg tracking-tight hover:opacity-80 transition-opacity">
-            MedDispatch.
+          <Link href="/#hero" className="flex items-center gap-2 font-medium text-lg tracking-tight">
+            <span className="hidden sm:inline-block">CallAmbulance.</span>
           </Link>
         </div>
         
