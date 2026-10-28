@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import axios from "axios";
 
 const PROD_FRONTEND_URL = "https://emergency-ambulance-dispatch-system-iota.vercel.app";
+const PROD_BACKEND_API_URL = "https://emergency-ambulance-dispatch-system-seven.vercel.app/api/v1";
 
 // Ensure NEXTAUTH_URL never points to localhost when deployed on Vercel/production
 if (
@@ -13,7 +14,11 @@ if (
   process.env.NEXTAUTH_URL = host.startsWith("http") ? host : `https://${host}`;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://emergency-ambulance-dispatch-system-seven.vercel.app/api/v1";
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL;
+const API_URL =
+  rawApiUrl && !((process.env.VERCEL || process.env.NODE_ENV === "production") && rawApiUrl.includes("localhost"))
+    ? rawApiUrl
+    : PROD_BACKEND_API_URL;
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -23,10 +28,21 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
         idToken: { label: "Google ID Token", type: "text" },
+        accessToken: { label: "Access Token", type: "text" },
+        userJson: { label: "User JSON", type: "text" },
       },
       async authorize(credentials) {
         try {
-          if (credentials?.idToken) {
+          if (credentials?.accessToken && credentials?.userJson) {
+            const parsedUser = JSON.parse(credentials.userJson);
+            return {
+              id: parsedUser.id,
+              name: parsedUser.name || parsedUser.firstName || parsedUser.email,
+              email: parsedUser.email,
+              role: parsedUser.role,
+              accessToken: credentials.accessToken,
+            };
+          } else if (credentials?.idToken) {
             // Google Social Login Flow
             const res = await axios.post(`${API_URL}/auth/social-login`, {
               idToken: credentials.idToken,
@@ -103,5 +119,7 @@ export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret:
+    process.env.NEXTAUTH_SECRET ||
+    "my_super_secret_jwt_token_for_nextauth_development",
 };

@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
 import { ShieldCheck, User, Truck, Loader2 } from "lucide-react";
+import { api } from "@/lib/axios";
 
 interface OneClickLoginProps {
   onSelectCredentials?: (email: string, password: string) => void;
@@ -43,7 +43,6 @@ const DEMO_ACCOUNTS = [
 
 export function OneClickLogin({ onSelectCredentials }: OneClickLoginProps) {
   const [loading, setLoading] = useState<string | null>(null);
-  const router = useRouter();
 
   const handleDemoLogin = async (account: (typeof DEMO_ACCOUNTS)[number]) => {
     setLoading(account.key);
@@ -51,21 +50,39 @@ export function OneClickLogin({ onSelectCredentials }: OneClickLoginProps) {
       onSelectCredentials(account.email, account.password);
     }
     try {
-      const res = await signIn("credentials", {
-        redirect: false,
+      // 1. Authenticate against /api/v1/auth/login
+      const apiRes = await api.post("/auth/login", {
         email: account.email,
         password: account.password,
       });
 
+      const authData = apiRes.data?.data;
+      if (!apiRes.data?.success || !authData?.accessToken) {
+        throw new Error(apiRes.data?.message || "Invalid credentials");
+      }
+
+      // 2. Establish NextAuth session with the verified token & user
+      const res = await signIn("credentials", {
+        redirect: false,
+        email: account.email,
+        password: account.password,
+        accessToken: authData.accessToken,
+        userJson: JSON.stringify(authData.user),
+      });
+
       if (res?.error) {
         toast.error(`Demo login failed: ${res.error}`);
+        setLoading(null);
       } else {
         toast.success(`Signed in as ${account.label}`);
-        router.push(account.redirectTo);
+        window.location.href = account.redirectTo;
       }
-    } catch {
-      toast.error("An error occurred during demo login");
-    } finally {
+    } catch (error: any) {
+      const msg =
+        error.response?.data?.message ||
+        error.message ||
+        "An error occurred during demo login";
+      toast.error(`Demo login failed: ${msg}`);
       setLoading(null);
     }
   };

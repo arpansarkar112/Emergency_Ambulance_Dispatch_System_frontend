@@ -7,13 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Ambulance } from "lucide-react";
 import { signIn, getSession } from "next-auth/react";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { GoogleLogin } from "@react-oauth/google";
 import { OneClickLogin } from "@/components/shared/OneClickLogin";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { api } from "@/lib/axios";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -24,7 +24,6 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   const {
     register,
@@ -39,36 +38,55 @@ export default function LoginPage() {
     },
   });
 
-  const routeUserBasedOnRole = async () => {
-    const session = await getSession();
-    const role = (session?.user as any)?.role || "PATIENT";
+  const routeUserBasedOnRole = async (explicitRole?: string) => {
+    let role = explicitRole;
+    if (!role) {
+      const session = await getSession();
+      role = (session?.user as any)?.role || "PATIENT";
+    }
     if (role === "ADMIN") {
-      router.push("/admin");
+      window.location.href = "/admin";
     } else if (role === "DRIVER") {
-      router.push("/provider");
+      window.location.href = "/provider";
     } else {
-      router.push("/dashboard");
+      window.location.href = "/dashboard";
     }
   };
 
   const onSubmit = async (values: LoginFormValues) => {
     setLoading(true);
     try {
-      const res = await signIn("credentials", {
-        redirect: false,
+      const apiRes = await api.post("/auth/login", {
         email: values.email,
         password: values.password,
       });
 
+      const authData = apiRes.data?.data;
+      if (!apiRes.data?.success || !authData?.accessToken) {
+        throw new Error(apiRes.data?.message || "Invalid email or password");
+      }
+
+      const res = await signIn("credentials", {
+        redirect: false,
+        email: values.email,
+        password: values.password,
+        accessToken: authData.accessToken,
+        userJson: JSON.stringify(authData.user),
+      });
+
       if (res?.error) {
         toast.error(res.error);
+        setLoading(false);
       } else {
         toast.success("Login successful!");
-        await routeUserBasedOnRole();
+        await routeUserBasedOnRole(authData.user?.role);
       }
-    } catch {
-      toast.error("Something went wrong");
-    } finally {
+    } catch (error: any) {
+      const msg =
+        error.response?.data?.message ||
+        error.message ||
+        "Something went wrong";
+      toast.error(msg);
       setLoading(false);
     }
   };
