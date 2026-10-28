@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,17 +10,43 @@ import { api } from "@/lib/axios";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Ambulance, MapPin, Phone } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+const createRequestSchema = z.object({
+  patientPhone: z.string().min(5, "Patient phone number is required"),
+  pickupAddress: z.string().min(3, "Pickup address is required"),
+  destinationAddress: z.string().min(3, "Destination hospital or address is required"),
+  priority: z.enum(["CRITICAL", "HIGH", "MEDIUM", "LOW"]),
+});
+
+type CreateRequestFormValues = z.infer<typeof createRequestSchema>;
 
 export default function RequestAmbulancePage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [patientPhone, setPatientPhone] = useState("");
-  const [pickup, setPickup] = useState("");
-  const [dropoff, setDropoff] = useState("");
-  const [priority, setPriority] = useState("HIGH");
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<CreateRequestFormValues>({
+    resolver: zodResolver(createRequestSchema),
+    defaultValues: {
+      patientPhone: "",
+      pickupAddress: "",
+      destinationAddress: "",
+      priority: "HIGH",
+    },
+  });
+
+  const priority = watch("priority");
 
   const requestMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: CreateRequestFormValues) => {
       const res = await api.post('/requests', data);
       return res.data;
     },
@@ -40,14 +65,8 @@ export default function RequestAmbulancePage() {
     }
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    requestMutation.mutate({
-      patientPhone,
-      pickupAddress: pickup,
-      destinationAddress: dropoff,
-      priority
-    });
+  const onSubmit = (values: CreateRequestFormValues) => {
+    requestMutation.mutate(values);
   };
 
   return (
@@ -65,7 +84,7 @@ export default function RequestAmbulancePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
               <div className="space-y-2">
                 <Label htmlFor="phone">Patient Phone Number</Label>
                 <div className="relative">
@@ -74,11 +93,12 @@ export default function RequestAmbulancePage() {
                     id="phone" 
                     placeholder="e.g. +1 234 567 890" 
                     className="pl-9"
-                    value={patientPhone}
-                    onChange={(e) => setPatientPhone(e.target.value)}
-                    required
+                    {...register("patientPhone")}
                   />
                 </div>
+                {errors.patientPhone && (
+                  <p className="text-xs text-destructive">{errors.patientPhone.message}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -89,11 +109,12 @@ export default function RequestAmbulancePage() {
                     id="pickup" 
                     placeholder="Enter pickup address or coordinates" 
                     className="pl-9"
-                    value={pickup}
-                    onChange={(e) => setPickup(e.target.value)}
-                    required
+                    {...register("pickupAddress")}
                   />
                 </div>
+                {errors.pickupAddress && (
+                  <p className="text-xs text-destructive">{errors.pickupAddress.message}</p>
+                )}
               </div>
               
               <div className="space-y-2">
@@ -104,16 +125,20 @@ export default function RequestAmbulancePage() {
                     id="dropoff" 
                     placeholder="Enter hospital name or address" 
                     className="pl-9"
-                    value={dropoff}
-                    onChange={(e) => setDropoff(e.target.value)}
-                    required
+                    {...register("destinationAddress")}
                   />
                 </div>
+                {errors.destinationAddress && (
+                  <p className="text-xs text-destructive">{errors.destinationAddress.message}</p>
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="priority">Criticality / Urgency Level</Label>
-                <Select value={priority} onValueChange={(val) => setPriority(val || "HIGH")}>
+                <Select
+                  value={priority}
+                  onValueChange={(val) => setValue("priority", (val as CreateRequestFormValues["priority"]) || "HIGH", { shouldValidate: true })}
+                >
                   <SelectTrigger id="priority">
                     <SelectValue placeholder="Select urgency" />
                   </SelectTrigger>

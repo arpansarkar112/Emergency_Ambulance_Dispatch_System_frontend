@@ -1,20 +1,41 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+const profileSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+});
+
+type ProfileFormValues = z.infer<typeof profileSchema>;
 
 export default function UserProfilePage() {
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    phone: "",
-    address: ""
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      phone: "",
+      address: "",
+    },
   });
 
   const { data: user, isPending, refetch } = useQuery({
@@ -27,17 +48,17 @@ export default function UserProfilePage() {
 
   useEffect(() => {
     if (user) {
-      setFormData({
+      reset({
         firstName: user.profile?.firstName || "",
         lastName: user.profile?.lastName || "",
         phone: user.profile?.phone || "",
         address: user.profile?.address || ""
       });
     }
-  }, [user]);
+  }, [user, reset]);
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
+    mutationFn: async (data: ProfileFormValues) => {
       const res = await api.patch('/users/me', data);
       return res.data;
     },
@@ -50,17 +71,31 @@ export default function UserProfilePage() {
     }
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    updateProfileMutation.mutate(formData);
+  const onSubmit = (values: ProfileFormValues) => {
+    updateProfileMutation.mutate(values);
   };
 
   if (isPending) {
-    return <div className="p-8">Loading profile...</div>;
+    return (
+      <div className="flex-1 space-y-4 p-8 pt-6">
+        <Skeleton className="h-9 w-48" />
+        <Card className="max-w-2xl">
+          <CardHeader>
+            <Skeleton className="h-6 w-40" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-9 w-32" />
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -71,27 +106,27 @@ export default function UserProfilePage() {
           <CardTitle>Personal Information</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="firstName">First Name</Label>
                 <Input 
                   id="firstName"
-                  name="firstName" 
-                  value={formData.firstName} 
-                  onChange={handleChange} 
-                  required 
+                  {...register("firstName")}
                 />
+                {errors.firstName && (
+                  <p className="text-xs text-destructive">{errors.firstName.message}</p>
+                )}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="lastName">Last Name</Label>
                 <Input 
                   id="lastName"
-                  name="lastName" 
-                  value={formData.lastName} 
-                  onChange={handleChange} 
-                  required 
+                  {...register("lastName")}
                 />
+                {errors.lastName && (
+                  <p className="text-xs text-destructive">{errors.lastName.message}</p>
+                )}
               </div>
             </div>
             
@@ -110,9 +145,7 @@ export default function UserProfilePage() {
               <Label htmlFor="phone">Phone / Emergency Contact</Label>
               <Input 
                 id="phone"
-                name="phone" 
-                value={formData.phone} 
-                onChange={handleChange} 
+                {...register("phone")}
                 placeholder="+1 234 567 8900"
               />
             </div>
@@ -121,9 +154,7 @@ export default function UserProfilePage() {
               <Label htmlFor="address">Address</Label>
               <Input 
                 id="address"
-                name="address" 
-                value={formData.address} 
-                onChange={handleChange} 
+                {...register("address")}
                 placeholder="123 Main St, City, Country"
               />
             </div>

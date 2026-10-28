@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DollarSign, TrendingUp, MapPin, Calendar, Clock } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function EarningsPage() {
   const { data: session } = useSession();
@@ -22,7 +23,17 @@ export default function EarningsPage() {
   });
 
   if (isLoading) {
-    return <div className="p-8">Loading earnings data...</div>;
+    return (
+      <div className="flex-1 space-y-6 p-8 pt-6">
+        <Skeleton className="h-9 w-64" />
+        <div className="grid gap-4 md:grid-cols-3">
+          <Skeleton className="h-28 w-full rounded-xl" />
+          <Skeleton className="h-28 w-full rounded-xl" />
+          <Skeleton className="h-28 w-full rounded-xl" />
+        </div>
+        <Skeleton className="h-36 w-full rounded-xl" />
+      </div>
+    );
   }
 
   const allRequests = Array.isArray(requests) ? requests : [];

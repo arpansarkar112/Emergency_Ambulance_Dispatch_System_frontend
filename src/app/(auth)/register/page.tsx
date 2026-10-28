@@ -12,15 +12,42 @@ import { signIn, getSession } from "next-auth/react";
 import { GoogleLogin } from "@react-oauth/google";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/axios";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+const registerSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  email: z.string().email("Invalid email format"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  role: z.enum(["PATIENT", "DRIVER"]),
+});
+
+type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
-  const [role, setRole] = useState("PATIENT");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const router = useRouter();
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      password: "",
+      role: "PATIENT",
+    },
+  });
+
+  const selectedRole = watch("role");
 
   const routeUserBasedOnRole = async () => {
     const session = await getSession();
@@ -48,31 +75,23 @@ export default function RegisterPage() {
         toast.success("Google login successful!");
         await routeUserBasedOnRole();
       }
-    } catch (error) {
+    } catch {
       toast.error("Google login failed");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (values: RegisterFormValues) => {
     setLoading(true);
     try {
-      const res = await api.post("/auth/register", {
-        firstName,
-        lastName,
-        email,
-        password,
-        role,
-      });
+      const res = await api.post("/auth/register", values);
       
       if (res.data.success) {
         toast.success("Account created successfully!");
         router.push("/login");
       }
     } catch (error: any) {
-      console.error("REGISTRATION ERROR:", error);
       const apiError = error.response?.data;
       let errorMessage = apiError?.message || "Registration failed. Please check your network.";
       if (apiError?.errors && apiError.errors.length > 0) {
@@ -97,29 +116,31 @@ export default function RegisterPage() {
           <p className="text-sm text-muted-foreground">Enter your details to get started</p>
         </div>
 
-        <form onSubmit={handleRegister} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="first-name">First name</Label>
               <Input 
                 id="first-name" 
                 placeholder="Max" 
-                value={firstName} 
-                onChange={(e) => setFirstName(e.target.value)} 
-                required 
+                {...register("firstName")}
                 className="bg-gray-50/50"
               />
+              {errors.firstName && (
+                <p className="text-xs text-destructive">{errors.firstName.message}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="last-name">Last name</Label>
               <Input 
                 id="last-name" 
                 placeholder="Robinson" 
-                value={lastName} 
-                onChange={(e) => setLastName(e.target.value)} 
-                required 
+                {...register("lastName")}
                 className="bg-gray-50/50"
               />
+              {errors.lastName && (
+                <p className="text-xs text-destructive">{errors.lastName.message}</p>
+              )}
             </div>
           </div>
           
@@ -129,11 +150,12 @@ export default function RegisterPage() {
               id="email" 
               placeholder="name@example.com" 
               type="email" 
-              value={email} 
-              onChange={(e) => setEmail(e.target.value)} 
-              required 
+              {...register("email")}
               className="bg-gray-50/50"
             />
+            {errors.email && (
+              <p className="text-xs text-destructive">{errors.email.message}</p>
+            )}
           </div>
           
           <div className="space-y-2">
@@ -141,16 +163,21 @@ export default function RegisterPage() {
             <Input 
               id="password" 
               type="password" 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
-              required 
+              placeholder="Minimum 6 characters"
+              {...register("password")}
               className="bg-gray-50/50"
             />
+            {errors.password && (
+              <p className="text-xs text-destructive">{errors.password.message}</p>
+            )}
           </div>
 
           <div className="space-y-2">
             <Label>Account Role</Label>
-            <Select value={role} onValueChange={(val) => setRole(val || "PATIENT")}>
+            <Select
+              value={selectedRole}
+              onValueChange={(val) => setValue("role", (val as "PATIENT" | "DRIVER") || "PATIENT", { shouldValidate: true })}
+            >
               <SelectTrigger className="bg-gray-50/50">
                 <SelectValue placeholder="Select your role" />
               </SelectTrigger>

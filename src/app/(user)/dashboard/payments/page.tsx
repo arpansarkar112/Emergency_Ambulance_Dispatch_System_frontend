@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { CreditCard } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function UserPaymentsPage() {
   const { data: requests, isPending } = useQuery({
@@ -42,7 +43,17 @@ export default function UserPaymentsPage() {
   });
 
   if (isPending) {
-    return <div className="p-8">Loading payments...</div>;
+    return (
+      <div className="flex-1 space-y-4 p-8 pt-6">
+        <Skeleton className="h-9 w-56" />
+        <Skeleton className="h-4 w-96" />
+        <div className="rounded-md border bg-card mt-4 p-4 space-y-3">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+      </div>
+    );
   }
 
   const getPaymentObj = (req: any) => {

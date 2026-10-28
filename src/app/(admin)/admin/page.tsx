@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { MapPin, Clock, Truck, User, DollarSign } from "lucide-react";
 import { useState } from "react";
 import Link from "next/link";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const PRIORITY_RANK: Record<string, number> = {
   CRITICAL: 4,
@@ -68,7 +69,25 @@ export default function AdminRequestsPage() {
   });
 
   if (requestsLoading || ambulancesLoading) {
-    return <div className="p-8">Loading emergency requests...</div>;
+    return (
+      <div className="flex-1 space-y-4 p-8 pt-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-9 w-64" />
+            <Skeleton className="h-4 w-96" />
+          </div>
+          <div className="flex gap-3">
+            <Skeleton className="h-9 w-40" />
+            <Skeleton className="h-9 w-40" />
+          </div>
+        </div>
+        <div className="grid gap-4 mt-4">
+          <Skeleton className="h-40 w-full rounded-xl" />
+          <Skeleton className="h-40 w-full rounded-xl" />
+          <Skeleton className="h-40 w-full rounded-xl" />
+        </div>
+      </div>
+    );
   }
 
   let allRequests = Array.isArray(requests) ? [...requests] : [];

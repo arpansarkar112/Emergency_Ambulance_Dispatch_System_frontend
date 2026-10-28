@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { MapPin, Phone, Clock, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useSession } from "next-auth/react";
 
 export default function ProviderTasksPage() {
@@ -46,7 +47,16 @@ export default function ProviderTasksPage() {
   });
 
   if (sessionStatus === "loading" || loadingRequests) {
-    return <div className="p-8">Loading your dashboard...</div>;
+    return (
+      <div className="flex-1 space-y-6 p-8 pt-6">
+        <div className="space-y-2">
+          <Skeleton className="h-9 w-56" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+        <Skeleton className="h-44 w-full rounded-xl" />
+        <Skeleton className="h-44 w-full rounded-xl" />
+      </div>
+    );
   }
 
   const allRequests = Array.isArray(requests) ? [...requests] : [];

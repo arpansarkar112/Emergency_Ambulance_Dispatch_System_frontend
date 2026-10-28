@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useSession } from "next-auth/react";
 
 export default function ProviderVehiclesPage() {
@@ -38,7 +39,15 @@ export default function ProviderVehiclesPage() {
   });
 
   if (sessionStatus === "loading" || loadingAmbulances) {
-    return <div className="p-8">Loading your vehicles...</div>;
+    return (
+      <div className="flex-1 space-y-6 p-8 pt-6">
+        <div className="space-y-2">
+          <Skeleton className="h-9 w-56" />
+          <Skeleton className="h-4 w-80" />
+        </div>
+        <Skeleton className="h-28 w-full rounded-xl" />
+      </div>
+    );
   }
 
   const assignedAmbulances = Array.isArray(ambulances) ? ambulances.filter((amb: any) => amb.driver?.id === userId) : [];

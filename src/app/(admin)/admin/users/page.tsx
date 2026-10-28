@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
 export default function AdminUsersPage() {
@@ -34,7 +35,17 @@ export default function AdminUsersPage() {
   });
 
   if (isPending) {
-    return <div className="p-8">Loading users...</div>;
+    return (
+      <div className="flex-1 space-y-4 p-8 pt-6">
+        <Skeleton className="h-9 w-56" />
+        <div className="rounded-md border bg-card mt-4 p-4 space-y-3">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+      </div>
+    );
   }
 
   const allUsers = Array.isArray(users) ? users : [];

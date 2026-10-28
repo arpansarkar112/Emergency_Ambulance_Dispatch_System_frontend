@@ -3,24 +3,50 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+const createAmbulanceSchema = z.object({
+  vehicleNumber: z.string().min(2, "Vehicle number is required"),
+  type: z.enum(["ICU", "BASIC", "PEDIATRIC"]),
+  currentAddress: z.string().min(2, "Station or address is required"),
+  driverId: z.string().optional(),
+});
+
+type CreateAmbulanceFormValues = z.infer<typeof createAmbulanceSchema>;
 
 export default function AdminAmbulancesPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [formData, setFormData] = useState({
-    vehicleNumber: "",
-    type: "ICU",
-    currentAddress: "",
-    driverId: ""
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm<CreateAmbulanceFormValues>({
+    resolver: zodResolver(createAmbulanceSchema),
+    defaultValues: {
+      vehicleNumber: "",
+      type: "ICU",
+      currentAddress: "",
+      driverId: "",
+    },
   });
+
+  const selectedType = watch("type");
+  const selectedDriverId = watch("driverId");
 
   const { data: drivers } = useQuery({
     queryKey: ['admin-drivers'],
@@ -47,7 +73,7 @@ export default function AdminAmbulancesPage() {
   };
 
   const createMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
+    mutationFn: async (data: CreateAmbulanceFormValues) => {
       const payload: any = {
         vehicleNumber: data.vehicleNumber.trim(),
         type: data.type || "BASIC",
@@ -62,7 +88,7 @@ export default function AdminAmbulancesPage() {
     onSuccess: () => {
       toast.success("Ambulance created successfully");
       setOpen(false);
-      setFormData({ vehicleNumber: "", type: "ICU", currentAddress: "", driverId: "" });
+      reset({ vehicleNumber: "", type: "ICU", currentAddress: "", driverId: "" });
       queryClient.invalidateQueries({ queryKey: ['admin-ambulances'] });
     },
     onError: (error: any) => {
@@ -90,7 +116,23 @@ export default function AdminAmbulancesPage() {
   });
 
   if (isPending) {
-    return <div className="p-8">Loading ambulances...</div>;
+    return (
+      <div className="flex-1 space-y-4 p-8 pt-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-9 w-64" />
+            <Skeleton className="h-4 w-96" />
+          </div>
+          <Skeleton className="h-9 w-36" />
+        </div>
+        <div className="rounded-md border bg-card mt-4 p-4 space-y-3">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+      </div>
+    );
   }
 
   const allAmbulances = Array.isArray(ambulances) ? ambulances : [];
@@ -115,28 +157,27 @@ export default function AdminAmbulancesPage() {
               <DialogTitle>Add New Ambulance</DialogTitle>
             </DialogHeader>
             <form 
-              onSubmit={(e) => {
-                e.preventDefault();
-                createMutation.mutate(formData);
-              }} 
+              onSubmit={handleSubmit((values) => createMutation.mutate(values))} 
               className="space-y-4 mt-4"
+              noValidate
             >
               <div className="space-y-2">
                 <Label htmlFor="vehicleNumber">Vehicle Number (License Plate)</Label>
                 <Input 
                   id="vehicleNumber" 
-                  value={formData.vehicleNumber}
-                  onChange={e => setFormData({ ...formData, vehicleNumber: e.target.value })}
-                  required
+                  {...register("vehicleNumber")}
                   placeholder="e.g. DHA-11-2233"
                 />
+                {errors.vehicleNumber && (
+                  <p className="text-xs text-destructive">{errors.vehicleNumber.message}</p>
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="type">Vehicle Type (Criticality Tier)</Label>
                 <Select 
-                  value={formData.type} 
-                  onValueChange={(val) => setFormData({ ...formData, type: val || "ICU" })}
+                  value={selectedType} 
+                  onValueChange={(val) => setValue("type", (val as CreateAmbulanceFormValues["type"]) || "ICU", { shouldValidate: true })}
                 >
                   <SelectTrigger id="type">
                     <SelectValue placeholder="Select Vehicle Type" />
@@ -153,18 +194,19 @@ export default function AdminAmbulancesPage() {
                 <Label htmlFor="currentAddress">Current Address / Station</Label>
                 <Input 
                   id="currentAddress" 
-                  value={formData.currentAddress}
-                  onChange={e => setFormData({ ...formData, currentAddress: e.target.value })}
-                  required
+                  {...register("currentAddress")}
                   placeholder="e.g. Central Medical Station"
                 />
+                {errors.currentAddress && (
+                  <p className="text-xs text-destructive">{errors.currentAddress.message}</p>
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="driverId">Assign Driver</Label>
                 <Select 
-                  value={formData.driverId || "UNASSIGNED"} 
-                  onValueChange={(val) => setFormData({ ...formData, driverId: val === "UNASSIGNED" ? "" : (val || "") })}
+                  value={selectedDriverId || "UNASSIGNED"} 
+                  onValueChange={(val) => setValue("driverId", val === "UNASSIGNED" ? "" : (val || ""), { shouldValidate: true })}
                 >
                   <SelectTrigger id="driverId">
                     <SelectValue placeholder="Select a Driver" />

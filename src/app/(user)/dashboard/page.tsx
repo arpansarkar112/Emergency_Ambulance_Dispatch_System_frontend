@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function UserDashboard() {
   const [filter, setFilter] = useState("ALL");
@@ -42,7 +43,22 @@ export default function UserDashboard() {
   });
 
   if (isPending) {
-    return <div className="p-8">Loading your bookings...</div>;
+    return (
+      <div className="flex-1 space-y-4 p-8 pt-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-9 w-48" />
+            <Skeleton className="h-4 w-80" />
+          </div>
+          <Skeleton className="h-9 w-40" />
+        </div>
+        <Skeleton className="h-10 w-80 mt-4" />
+        <div className="grid gap-4 mt-4">
+          <Skeleton className="h-40 w-full rounded-xl" />
+          <Skeleton className="h-40 w-full rounded-xl" />
+        </div>
+      </div>
+    );
   }
 
   const getPaymentObj = (req: any) => {
