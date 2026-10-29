@@ -1,4 +1,4 @@
-# CallAmbulance — Emergency Ambulance Dispatch System
+# CallAmbulance : Emergency Ambulance Dispatch System
 
 **Rapid medical response, callAmbulance.**
 
@@ -17,11 +17,10 @@ CallAmbulance is a full-stack, role-based **Emergency Ambulance Dispatch & Medic
 
 ## Demo Credentials & One-Click Login
 
-The `/login` page includes **One-Click Demo Role Login** buttons for instant evaluation across all 3 roles, or you can sign in manually using the credentials below:
+The `/login` page includes **One-Click Demo Role Login** buttons for instant evaluation across 2 roles, or you can sign in manually using the credentials below:
 
 | Role | Email | Password | Dashboard Route |
 | :--- | :--- | :--- | :--- |
-| **Admin** | `admin@ambulance.com` | `admin123` | `/admin` |
 | **User (Patient)** | `arpansarkar112@gmail.com` | `password123` | `/dashboard` |
 | **Provider (Driver)** | `driver@ambulance.com` | `password123` | `/provider` |
 
