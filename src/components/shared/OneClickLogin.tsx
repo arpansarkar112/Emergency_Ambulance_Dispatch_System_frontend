@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ShieldCheck, User, Truck, Loader2 } from "lucide-react";
+import { User, Truck, Loader2 } from "lucide-react";
 import { api } from "@/lib/axios";
 
 interface OneClickLoginProps {
@@ -12,15 +12,6 @@ interface OneClickLoginProps {
 }
 
 const DEMO_ACCOUNTS = [
-  {
-    key: "ADMIN",
-    label: "Demo Admin",
-    sublabel: "admin@ambulance.com",
-    email: "admin@ambulance.com",
-    password: "admin123",
-    redirectTo: "/admin",
-    icon: ShieldCheck,
-  },
   {
     key: "PATIENT",
     label: "Demo User (Patient)",
