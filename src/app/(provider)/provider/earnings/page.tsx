@@ -1,183 +1,162 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, TrendingUp, MapPin, Calendar, Clock } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { StatCard } from "@/components/shared/StatCard";
+import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSession } from "next-auth/react";
+import { Clock, DollarSign, TrendingUp } from "lucide-react";
+import type { DispatchRequestItem } from "@/types";
 
-export default function EarningsPage() {
+const TrendLineChart = dynamic(
+  () => import("@/components/shared/DashboardCharts").then((m) => m.TrendLineChart),
+  { ssr: false, loading: () => <Skeleton className="h-[340px] w-full rounded-xl" /> }
+);
+
+export default function ProviderEarningsPage() {
   const { data: session } = useSession();
-  const userId = (session?.user as any)?.id;
+  const userId = (session?.user as { id?: string } | undefined)?.id;
 
-  const { data: requests, isLoading } = useQuery({
-    queryKey: ['provider-requests', userId],
+  const { data: requests, isLoading } = useQuery<DispatchRequestItem[]>({
+    queryKey: ["provider-requests", userId],
     queryFn: async () => {
-      const res = await api.get('/requests/my-requests');
-      return res.data.data;
+      const res = await api.get("/requests/my-requests");
+      return res.data.data || [];
     },
-    enabled: !!userId,
+    enabled: Boolean(userId),
     refetchInterval: 8000,
   });
 
-  if (isLoading) {
-    return (
-      <div className="flex-1 space-y-6 p-8 pt-6">
-        <Skeleton className="h-9 w-64" />
-        <div className="grid gap-4 md:grid-cols-3">
-          <Skeleton className="h-28 w-full rounded-xl" />
-          <Skeleton className="h-28 w-full rounded-xl" />
-          <Skeleton className="h-28 w-full rounded-xl" />
+  const { data: stats } = useQuery({
+    queryKey: ["provider-stats", userId],
+    queryFn: async () => {
+      const res = await api.get("/requests/my-stats");
+      return res.data.data;
+    },
+    enabled: Boolean(userId),
+  });
+
+  const completedTrips = (Array.isArray(requests) ? requests : []).filter(
+    (r) => r.status === "COMPLETED"
+  );
+
+  const getAmount = (r: DispatchRequestItem) => Number(r.payment?.amount || r.amount || 0);
+  const isPaid = (r: DispatchRequestItem) =>
+    r.payment?.status === "SUCCESS" || r.paymentStatus === "SUCCESS";
+
+  const totalEarnings = completedTrips
+    .filter(isPaid)
+    .reduce((sum: number, r) => sum + getAmount(r), 0);
+  const pendingEarnings = completedTrips
+    .filter((r) => !isPaid(r) && getAmount(r) > 0)
+    .reduce((sum: number, r) => sum + getAmount(r), 0);
+
+  const columns: ColumnDef<DispatchRequestItem>[] = [
+    {
+      key: "id",
+      header: "Dispatch",
+      sortable: true,
+      sortValue: (r) => new Date(r.updatedAt || r.createdAt || 0).getTime(),
+      cell: (r) => (
+        <div>
+          <p className="font-mono text-xs font-semibold">#{r.id?.slice(0, 8).toUpperCase()}</p>
+          <p className="text-[11px] text-muted-foreground">
+            {new Date(r.updatedAt || r.createdAt).toLocaleDateString()}
+          </p>
         </div>
-        <Skeleton className="h-36 w-full rounded-xl" />
-      </div>
-    );
-  }
-
-  const allRequests = Array.isArray(requests) ? requests : [];
-  const completedTrips = allRequests.filter((req: any) => req.status === 'COMPLETED');
-
-  const getPaymentObj = (req: any) => {
-    if (req.payment) return req.payment;
-    if (Array.isArray(req.payments) && req.payments.length > 0) {
-      return (
-        req.payments.find((p: any) => p.status === "SUCCESS") ||
-        req.payments.find((p: any) => p.status === "PENDING") ||
-        req.payments[0]
-      );
-    }
-    return null;
-  };
-
-  const getAmount = (req: any) => {
-    const p = getPaymentObj(req);
-    return Number(p?.amount || req.amount || 0);
-  };
-
-  const isPaidOrder = (req: any) => {
-    const p = getPaymentObj(req);
-    return p?.status === 'SUCCESS' || p?.status === 'PAID' || req.paymentStatus === 'SUCCESS';
-  };
-
-  const isPendingBillOrder = (req: any) => {
-    const p = getPaymentObj(req);
-    return !isPaidOrder(req) && p && Number(p.amount) > 0;
-  };
-
-  const paidOrders = completedTrips.filter(isPaidOrder);
-  const pendingBillOrders = completedTrips.filter(isPendingBillOrder);
-
-  const totalEarnings = paidOrders.reduce((sum, req) => sum + getAmount(req), 0);
-  const pendingEarnings = pendingBillOrders.reduce((sum, req) => sum + getAmount(req), 0);
+      ),
+    },
+    {
+      key: "route",
+      header: "Route",
+      cell: (r) => (
+        <span className="text-xs text-muted-foreground block max-w-[260px] truncate">
+          {r.pickupAddress} → {r.destinationAddress}
+        </span>
+      ),
+    },
+    {
+      key: "amount",
+      header: "Trip Bill",
+      sortable: true,
+      sortValue: (r) => getAmount(r),
+      cell: (r) => {
+        const amt = getAmount(r);
+        return amt > 0 ? (
+          <span className="font-semibold text-brand-emerald">${amt.toFixed(2)}</span>
+        ) : (
+          <span className="text-xs text-muted-foreground">Unbilled</span>
+        );
+      },
+    },
+    {
+      key: "status",
+      header: "Settlement",
+      cell: (r) => {
+        if (isPaid(r))
+          return <Badge className="bg-emerald-600 text-white border-transparent">Paid</Badge>;
+        if (getAmount(r) > 0) return <Badge variant="secondary">Pending Patient Payment</Badge>;
+        return <Badge variant="outline">Awaiting Admin Bill</Badge>;
+      },
+    },
+  ];
 
   return (
-    <div className="flex-1 space-y-8 p-8 pt-6">
-      <h2 className="text-3xl font-bold tracking-tight">Earnings & Billing Overview</h2>
-      
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Paid Earnings</CardTitle>
-            <DollarSign className="h-4 w-4 text-emerald-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-emerald-600">${totalEarnings.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">From {paidOrders.length} paid trip(s)</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Patient Payments</CardTitle>
-            <Clock className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">${pendingEarnings.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">From {pendingBillOrders.length} billed trip(s) awaiting payment</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed Trips</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{completedTrips.length}</div>
-            <p className="text-xs text-muted-foreground">Lifetime completed dispatches</p>
-          </CardContent>
-        </Card>
+    <div className="flex-1 space-y-6 p-4 sm:p-8">
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+          Earnings & Trip Analytics
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Track settled Stripe trip payouts, pending patient invoices, and monthly volume.
+        </p>
       </div>
 
-      <div className="space-y-6">
-        <h3 className="text-xl font-semibold">Completed Trips & Payment Status</h3>
-        <div className="grid gap-6">
-          {completedTrips.length === 0 ? (
-            <div className="text-center p-12 border border-dashed rounded-xl bg-gray-50/50">
-              <h3 className="text-lg font-medium text-gray-900">No completed trips yet</h3>
-              <p className="text-sm text-gray-500 mt-2">Complete assigned dispatches to see billing and payment status here.</p>
-            </div>
-          ) : (
-            completedTrips.map((req: any) => {
-              const amount = getAmount(req);
-              const paid = isPaidOrder(req);
-              const billed = isPendingBillOrder(req);
-
-              return (
-                <Card key={req.id} className="overflow-hidden shadow-sm border-gray-100">
-                  <CardHeader className="flex flex-row items-start justify-between space-y-0 bg-gray-50/50 border-b border-gray-100 pb-4">
-                    <div>
-                      <CardTitle className="text-lg">Dispatch #{req.id?.substring(0, 8).toUpperCase()}</CardTitle>
-                      <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
-                        <Calendar className="h-4 w-4" />
-                        {new Date(req.updatedAt || req.createdAt).toLocaleString()}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      {amount > 0 ? (
-                        <div className="text-xl font-bold text-emerald-600">
-                          ${amount.toFixed(2)}
-                        </div>
-                      ) : (
-                        <div className="text-sm text-muted-foreground">Unbilled</div>
-                      )}
-                      {paid ? (
-                        <Badge className="mt-1 bg-emerald-600">
-                          Paid (Completed)
-                        </Badge>
-                      ) : billed ? (
-                        <Badge variant="secondary" className="mt-1 bg-blue-100 text-blue-800">
-                          Billed (Pending Patient Payment)
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="mt-1 text-yellow-600 border-yellow-600">
-                          Awaiting Admin Bill
-                        </Badge>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-start gap-2">
-                        <MapPin className="h-4 w-4 text-gray-400 mt-0.5" />
-                        <span className="text-gray-600">From:</span>
-                        <span className="font-medium text-gray-900">{req.pickupAddress || req.pickupLocation}</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <MapPin className="h-4 w-4 text-gray-400 mt-0.5" />
-                        <span className="text-gray-600">To:</span>
-                        <span className="font-medium text-gray-900">{req.destinationAddress || req.dropoffLocation}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })
-          )}
-        </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard
+          title="Total Paid Earnings"
+          value={`$${totalEarnings.toFixed(2)}`}
+          subtitle="Verified Stripe settlements"
+          icon={DollarSign}
+          accent="emerald"
+        />
+        <StatCard
+          title="Pending Patient Payments"
+          value={`$${pendingEarnings.toFixed(2)}`}
+          subtitle="Billed trips awaiting patient checkout"
+          icon={Clock}
+          accent="navy"
+        />
+        <StatCard
+          title="Completed Trips"
+          value={completedTrips.length}
+          subtitle="Lifetime completed dispatches"
+          icon={TrendingUp}
+          accent="primary"
+        />
       </div>
+
+      <TrendLineChart
+        title="Monthly Completed Missions & Billing ($)"
+        description="Dynamic 6-month trend based on your assigned emergency missions"
+        data={stats?.monthlyTrend || []}
+        lines={[
+          { dataKey: "requests", name: "Dispatches", color: "var(--chart-1)" },
+          { dataKey: "amount", name: "Trip Volume ($)", color: "var(--chart-3)" },
+        ]}
+      />
+
+      <DataTable
+        data={completedTrips}
+        columns={columns}
+        rowKey={(r) => r.id}
+        isLoading={isLoading}
+        searchPlaceholder="Search completed trips..."
+        searchAccessor={(r) => `${r.id} ${r.pickupAddress || ""} ${r.destinationAddress || ""}`}
+      />
     </div>
   );
 }

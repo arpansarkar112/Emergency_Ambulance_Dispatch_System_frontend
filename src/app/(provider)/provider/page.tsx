@@ -5,92 +5,118 @@ import { api } from "@/lib/axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Phone, Clock, Truck } from "lucide-react";
+import { StatCard } from "@/components/shared/StatCard";
+import {
+  Activity,
+  CheckCircle2,
+  Clock,
+  DollarSign,
+  MapPin,
+  Phone,
+  Truck,
+} from "lucide-react";
 import { toast } from "sonner";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSession } from "next-auth/react";
+import type { DispatchRequestItem } from "@/types";
 
 export default function ProviderTasksPage() {
   const { data: session, status: sessionStatus } = useSession();
   const queryClient = useQueryClient();
-  const userId = (session?.user as any)?.id;
+  const userId = (session?.user as { id?: string } | undefined)?.id;
 
-  const { data: requests, isLoading: loadingRequests, refetch: refetchRequests } = useQuery({
-    queryKey: ['provider-requests', userId],
+  const { data: requests, isLoading: loadingRequests, refetch: refetchRequests } = useQuery<
+    DispatchRequestItem[]
+  >({
+    queryKey: ["provider-requests", userId],
     queryFn: async () => {
-      const res = await api.get('/requests/my-requests');
+      const res = await api.get("/requests/my-requests");
+      return res.data.data || [];
+    },
+    enabled: Boolean(userId),
+    refetchInterval: 8000,
+  });
+
+  const { data: stats } = useQuery({
+    queryKey: ["provider-stats", userId],
+    queryFn: async () => {
+      const res = await api.get("/requests/my-stats");
       return res.data.data;
     },
-    enabled: !!userId,
-    refetchInterval: 8000,
+    enabled: Boolean(userId),
+    refetchInterval: 12_000,
   });
 
   const updateRequestMutation = useMutation({
     mutationFn: async ({ requestId, status }: { requestId: string; status: string }) => {
-      const res = await api.patch('/requests/status', { requestId, status });
+      const res = await api.patch("/requests/status", { requestId, status });
       return res.data;
     },
     onSuccess: (_data, variables) => {
       toast.success(`Emergency status updated to ${variables.status}!`);
       refetchRequests();
-      queryClient.invalidateQueries({ queryKey: ['ambulances'] });
+      queryClient.invalidateQueries({ queryKey: ["ambulances"] });
+      queryClient.invalidateQueries({ queryKey: ["provider-stats"] });
     },
-    onError: (error: any) => {
-      const apiErr = error.response?.data;
-      let msg = apiErr?.message || "Failed to update task status";
-      if (apiErr?.errors && apiErr.errors.length > 0) {
-        msg += ` - ${apiErr.errors.map((e: any) => e.message || e.msg).join(', ')}`;
-      }
-      toast.error(msg);
-    }
+    onError: (error: unknown) => {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || "Failed to update task status");
+    },
   });
 
   if (sessionStatus === "loading" || loadingRequests) {
     return (
-      <div className="flex-1 space-y-6 p-8 pt-6">
-        <div className="space-y-2">
-          <Skeleton className="h-9 w-56" />
-          <Skeleton className="h-4 w-96" />
+      <div className="flex-1 space-y-6 p-4 sm:p-8">
+        <Skeleton className="h-9 w-56" />
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Skeleton className="h-28 rounded-xl" />
+          <Skeleton className="h-28 rounded-xl" />
+          <Skeleton className="h-28 rounded-xl" />
         </div>
-        <Skeleton className="h-44 w-full rounded-xl" />
-        <Skeleton className="h-44 w-full rounded-xl" />
+        <Skeleton className="h-44 rounded-xl" />
       </div>
     );
   }
 
   const allRequests = Array.isArray(requests) ? [...requests] : [];
-  
-  const activeRequests = allRequests
-    .filter((req: any) => !['COMPLETED', 'CANCELLED'].includes(req.status))
-    .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  const activeRequests = allRequests.filter(
+    (req) => !["COMPLETED", "CANCELLED"].includes(req.status)
+  );
+  const completedRequests = allRequests.filter((req) =>
+    ["COMPLETED", "CANCELLED"].includes(req.status)
+  );
 
-  const completedRequests = allRequests
-    .filter((req: any) => ['COMPLETED', 'CANCELLED'].includes(req.status))
-    .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  const summary = stats?.summary || {};
 
-  const getPaymentInfo = (req: any) => {
+  const renderRequestCard = (req: DispatchRequestItem) => {
     const p = req.payment || (Array.isArray(req.payments) ? req.payments[0] : null);
-    if (!p) return { status: "UNBILLED", amount: 0 };
-    return { status: p.status, amount: Number(p.amount || 0) };
-  };
-
-  const renderRequestCard = (req: any) => {
-    const payInfo = getPaymentInfo(req);
+    const amount = Number(p?.amount || 0);
+    const isPaid = p?.status === "SUCCESS";
     const amb = req.ambulance || req.dispatch?.ambulance;
 
     return (
-      <Card key={req.id} className="overflow-hidden shadow-sm border-gray-100">
-        <CardHeader className="flex flex-row items-start justify-between space-y-0 bg-gray-50/50 border-b border-gray-100 pb-4">
-          <div>
-            <div className="flex flex-wrap items-center gap-3">
-              <CardTitle className="text-xl">Dispatch #{req.id?.substring(0, 8).toUpperCase()}</CardTitle>
-              <Badge variant={
-                req.priority === 'CRITICAL' ? 'destructive' :
-                req.priority === 'HIGH' ? 'destructive' :
-                req.priority === 'MEDIUM' ? 'default' : 'secondary'
-              }>
-                Criticality: {req.priority || "MEDIUM"}
+      <Card key={req.id} className="rounded-xl border border-border/80 bg-card shadow-xs overflow-hidden">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 bg-muted/30 border-b border-border/70 pb-4">
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="text-lg font-mono">
+                Dispatch #{req.id?.slice(0, 8).toUpperCase()}
+              </CardTitle>
+              <Badge
+                variant={
+                  req.priority === "CRITICAL" || req.priority === "HIGH"
+                    ? "destructive"
+                    : "secondary"
+                }
+              >
+                {req.priority || "MEDIUM"}
               </Badge>
               {amb && (
                 <Badge variant="outline" className="gap-1">
@@ -99,75 +125,77 @@ export default function ProviderTasksPage() {
                 </Badge>
               )}
             </div>
-            <div className="flex items-center gap-2 mt-3 text-sm font-medium text-gray-700">
-              <Clock className="h-4 w-4 text-muted-foreground" /> 
-              Emergency Status: <span className="text-primary font-semibold">{req.status}</span>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
+              Status: <span className="text-primary font-semibold">{req.status}</span>
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-1.5">
-            {payInfo.status === "SUCCESS" ? (
-              <Badge className="bg-emerald-600">Paid: ${payInfo.amount.toFixed(2)}</Badge>
-            ) : payInfo.amount > 0 ? (
-              <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                Billed: ${payInfo.amount.toFixed(2)} (Pending Payment)
+          <div>
+            {isPaid ? (
+              <Badge className="bg-emerald-600 text-white border-transparent">
+                Paid: ${amount.toFixed(2)}
               </Badge>
+            ) : amount > 0 ? (
+              <Badge variant="secondary">Billed: ${amount.toFixed(2)}</Badge>
             ) : req.status === "COMPLETED" ? (
-              <Badge variant="outline" className="text-yellow-600 border-yellow-600">
-                Awaiting Admin Bill
-              </Badge>
+              <Badge variant="outline">Awaiting Admin Bill</Badge>
             ) : null}
           </div>
         </CardHeader>
-        <CardContent className="pt-6">
+
+        <CardContent className="pt-5">
           <div className="grid md:grid-cols-2 gap-6">
-            <div className="space-y-4 text-sm">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 rounded-full bg-blue-100 p-1.5 text-blue-700">
-                  <MapPin className="h-4 w-4" />
-                </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex items-start gap-2.5">
+                <MapPin className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                 <div>
-                  <p className="font-semibold text-gray-900">Pickup Location</p>
-                  <p className="text-gray-600">{req.pickupAddress || req.pickupLocation}</p>
+                  <p className="text-xs font-semibold text-foreground">Pickup Location</p>
+                  <p className="text-muted-foreground">{req.pickupAddress}</p>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 rounded-full bg-emerald-100 p-1.5 text-emerald-700">
-                  <MapPin className="h-4 w-4" />
-                </div>
+              <div className="flex items-start gap-2.5">
+                <MapPin className="h-4 w-4 text-brand-emerald mt-0.5 shrink-0" />
                 <div>
-                  <p className="font-semibold text-gray-900">Destination (Hospital)</p>
-                  <p className="text-gray-600">{req.destinationAddress || req.dropoffLocation}</p>
+                  <p className="text-xs font-semibold text-foreground">Destination Hospital</p>
+                  <p className="text-muted-foreground">{req.destinationAddress}</p>
                 </div>
               </div>
             </div>
-            
-            <div className="flex flex-col justify-end gap-3 border-t md:border-t-0 md:border-l pt-4 md:pt-0 md:pl-6 border-gray-100">
+
+            <div className="flex flex-col justify-end gap-3 border-t md:border-t-0 md:border-l border-border/70 pt-4 md:pt-0 md:pl-6">
               <div className="space-y-1.5">
-                <span className="text-xs font-medium text-muted-foreground">Update Emergency Situation Status</span>
-                <Select 
-                  value={req.status} 
-                  onValueChange={(val) => {
-                    if (val) updateRequestMutation.mutate({ requestId: req.id, status: val });
-                  }}
-                  disabled={req.status === 'COMPLETED' || req.status === 'CANCELLED' || updateRequestMutation.isPending}
+                <span className="text-xs font-medium text-muted-foreground">
+                  Update Live Mission Status
+                </span>
+                <Select
+                  value={req.status}
+                  onValueChange={(val) =>
+                    val && updateRequestMutation.mutate({ requestId: req.id, status: val })
+                  }
+                  disabled={
+                    req.status === "COMPLETED" ||
+                    req.status === "CANCELLED" ||
+                    updateRequestMutation.isPending
+                  }
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="w-full h-10 rounded-xl">
                     <SelectValue placeholder="Update Status" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ASSIGNED">ASSIGNED — Ready to Depart</SelectItem>
                     <SelectItem value="EN_ROUTE">EN_ROUTE — En Route to Patient</SelectItem>
-                    <SelectItem value="PICKED_UP">PICKED_UP — Patient Picked Up</SelectItem>
+                    <SelectItem value="PICKED_UP">PICKED_UP — Patient Onboard</SelectItem>
                     <SelectItem value="COMPLETED">COMPLETED — Delivered to Hospital</SelectItem>
                     <SelectItem value="CANCELLED">CANCELLED — Emergency Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <a href={`tel:${req.patientPhone || req.patient?.profile?.phone}`} className="w-full">
                 <Button className="w-full justify-start gap-2" variant="outline" type="button">
-                  <Phone className="h-4 w-4" /> Contact {req.patient?.profile?.firstName || "Patient"} ({req.patientPhone || "N/A"})
+                  <Phone className="h-4 w-4 text-primary" />
+                  Call {req.patient?.profile?.firstName || "Patient"} ({req.patientPhone || "N/A"})
                 </Button>
               </a>
             </div>
@@ -178,42 +206,67 @@ export default function ProviderTasksPage() {
   };
 
   return (
-    <div className="flex-1 space-y-8 p-8 pt-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between space-y-4 md:space-y-0">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Driver Dashboard</h2>
-          <p className="text-muted-foreground mt-1">
-            Update the emergency situation status as you respond to allocated dispatches.
-          </p>
-        </div>
+    <div className="flex-1 space-y-6 p-4 sm:p-8">
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+          Driver Dispatch Console
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Respond to assigned missions and report real-time milestones to patients and command.
+        </p>
       </div>
 
-      <div className="space-y-6">
-        <h3 className="text-xl font-semibold">Active Dispatches ({activeRequests.length})</h3>
-        <div className="grid gap-6">
-          {activeRequests.length === 0 ? (
-            <div className="text-center p-12 border border-dashed rounded-xl bg-gray-50/50">
-              <h3 className="text-lg font-medium text-gray-900">No active requests</h3>
-              <p className="text-sm text-gray-500 mt-2">You currently have no active dispatches assigned to you.</p>
-            </div>
-          ) : (
-            activeRequests.map(renderRequestCard)
-          )}
-        </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard
+          title="Active Assignments"
+          value={summary.activeRequests ?? activeRequests.length}
+          subtitle="Missions currently in progress"
+          icon={Activity}
+          accent="primary"
+        />
+        <StatCard
+          title="Completed Missions"
+          value={summary.completedRequests ?? completedRequests.length}
+          subtitle="Lifetime hospital handovers"
+          icon={CheckCircle2}
+          accent="emerald"
+        />
+        <StatCard
+          title="Paid Earnings"
+          value={`$${Number(summary.totalPaid || 0).toFixed(2)}`}
+          subtitle={`$${Number(summary.pendingAmount || 0).toFixed(2)} awaiting settlement`}
+          icon={DollarSign}
+          accent="navy"
+        />
       </div>
 
-      <div className="space-y-6">
-        <h3 className="text-xl font-semibold">Completed & Past Dispatches ({completedRequests.length})</h3>
-        <div className="grid gap-6">
-          {completedRequests.length === 0 ? (
-            <div className="text-center p-12 border border-dashed rounded-xl bg-gray-50/50">
-              <h3 className="text-lg font-medium text-gray-900">No completed requests</h3>
-              <p className="text-sm text-gray-500 mt-2">You have not completed any dispatches yet.</p>
-            </div>
-          ) : (
-            completedRequests.map(renderRequestCard)
-          )}
-        </div>
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold text-foreground">
+          Active Dispatches ({activeRequests.length})
+        </h2>
+        {activeRequests.length === 0 ? (
+          <Card className="rounded-xl border border-dashed border-border p-10 text-center">
+            <p className="font-medium text-foreground">No active missions assigned</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Keep your vehicle marked AVAILABLE in Assigned Vehicles to receive new calls.
+            </p>
+          </Card>
+        ) : (
+          <div className="grid gap-4">{activeRequests.map(renderRequestCard)}</div>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold text-foreground">
+          Completed & Past Dispatches ({completedRequests.length})
+        </h2>
+        {completedRequests.length === 0 ? (
+          <Card className="rounded-xl border border-dashed border-border p-10 text-center">
+            <p className="font-medium text-foreground">No completed dispatches yet</p>
+          </Card>
+        ) : (
+          <div className="grid gap-4">{completedRequests.map(renderRequestCard)}</div>
+        )}
       </div>
     </div>
   );

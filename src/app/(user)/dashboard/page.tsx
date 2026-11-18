@@ -1,24 +1,53 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Clock, MapPin, CreditCard, Ambulance, Truck, User } from "lucide-react";
+import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
+import { StatCard } from "@/components/shared/StatCard";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import Link from "next/link";
-import { useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+import {
+  Activity,
+  Ambulance,
+  ArrowRight,
+  CheckCircle2,
+  CreditCard,
+  DollarSign,
+  PlusCircle,
+} from "lucide-react";
+import type { DispatchRequestItem } from "@/types";
 
-export default function UserDashboard() {
-  const [filter, setFilter] = useState("ALL");
+const TrendLineChart = dynamic(
+  () => import("@/components/shared/DashboardCharts").then((m) => m.TrendLineChart),
+  { ssr: false, loading: () => <Skeleton className="h-[340px] w-full rounded-xl" /> }
+);
+const CategoryBarChart = dynamic(
+  () => import("@/components/shared/DashboardCharts").then((m) => m.CategoryBarChart),
+  { ssr: false, loading: () => <Skeleton className="h-[340px] w-full rounded-xl" /> }
+);
+const BreakdownPieChart = dynamic(
+  () => import("@/components/shared/DashboardCharts").then((m) => m.BreakdownPieChart),
+  { ssr: false, loading: () => <Skeleton className="h-[340px] w-full rounded-xl" /> }
+);
 
-  const { data: requests, isPending } = useQuery({
-    queryKey: ['my-requests'],
+export default function PatientOverviewPage() {
+  const { data: stats, isPending: statsLoading } = useQuery({
+    queryKey: ["patient-stats"],
     queryFn: async () => {
-      const res = await api.get('/requests/my-requests');
+      const res = await api.get("/requests/my-stats");
+      return res.data.data;
+    },
+    refetchInterval: 12_000,
+  });
+
+  const { data: requests, isPending: reqLoading } = useQuery({
+    queryKey: ["my-requests"],
+    queryFn: async () => {
+      const res = await api.get("/requests/my-requests");
       return res.data.data || [];
     },
     refetchInterval: 8000,
@@ -27,199 +56,212 @@ export default function UserDashboard() {
   const payMutation = useMutation({
     mutationFn: async (requestId: string) => {
       const originUrl = typeof window !== "undefined" ? window.location.origin : undefined;
-      const res = await api.post('/payments/initiate', { requestId, originUrl });
+      const res = await api.post("/payments/initiate", { requestId, originUrl });
       return res.data.data || res.data;
     },
     onSuccess: (data) => {
-      if (data?.url) {
-        window.location.href = data.url;
-      } else {
-        toast.success("Payment initiated");
-      }
+      if (data?.url) window.location.href = data.url;
+      else toast.success("Payment session created");
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to initiate payment");
-    }
+    onError: (error: unknown) => {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || "Failed to initiate payment");
+    },
   });
 
-  if (isPending) {
+  if (statsLoading || reqLoading) {
     return (
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <Skeleton className="h-9 w-48" />
-            <Skeleton className="h-4 w-80" />
-          </div>
-          <Skeleton className="h-9 w-40" />
+      <div className="flex-1 space-y-6 p-4 sm:p-8">
+        <Skeleton className="h-9 w-56" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 rounded-xl" />
+          ))}
         </div>
-        <Skeleton className="h-10 w-80 mt-4" />
-        <div className="grid gap-4 mt-4">
-          <Skeleton className="h-40 w-full rounded-xl" />
-          <Skeleton className="h-40 w-full rounded-xl" />
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Skeleton className="h-80 rounded-xl" />
+          <Skeleton className="h-80 rounded-xl" />
         </div>
       </div>
     );
   }
 
-  const getPaymentObj = (req: any) => {
-    if (req.payment) return req.payment;
-    if (Array.isArray(req.payments) && req.payments.length > 0) {
-      return (
-        req.payments.find((p: any) => p.status === "SUCCESS") ||
-        req.payments.find((p: any) => p.status === "PENDING") ||
-        req.payments[0]
-      );
-    }
-    return null;
-  };
-
-  let filteredRequests = Array.isArray(requests) ? [...requests] : [];
-  filteredRequests.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-
-  if (filter === "CURRENT") {
-    filteredRequests = filteredRequests.filter(req => !['COMPLETED', 'CANCELLED'].includes(req.status));
-  } else if (filter === "PAST") {
-    filteredRequests = filteredRequests.filter(req => ['COMPLETED', 'CANCELLED'].includes(req.status));
-  }
+  const summary = stats?.summary || {};
+  const recentList = (Array.isArray(requests) ? requests : []).slice(0, 4);
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="flex-1 space-y-6 p-4 sm:p-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">My Bookings</h2>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+            Patient Dashboard Overview
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Track your active emergency ambulance dispatches and view past booking history.
+            Monitor live ambulance dispatches, past missions, and post-trip Stripe billing.
           </p>
         </div>
-        <Link href="/dashboard/request">
-          <Button>
-            + Request Ambulance
-          </Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/dashboard/request">
+            <Button className="gap-1.5">
+              <PlusCircle className="h-4 w-4" />
+              Request Ambulance
+            </Button>
+          </Link>
+          <Link href="/explore">
+            <Button variant="outline">Browse Fleet</Button>
+          </Link>
+        </div>
       </div>
 
-      <Tabs value={filter} onValueChange={setFilter} className="mt-4">
-        <TabsList>
-          <TabsTrigger value="ALL">All Bookings ({Array.isArray(requests) ? requests.length : 0})</TabsTrigger>
-          <TabsTrigger value="CURRENT">
-            Current & Active ({Array.isArray(requests) ? requests.filter((r: any) => !['COMPLETED', 'CANCELLED'].includes(r.status)).length : 0})
-          </TabsTrigger>
-          <TabsTrigger value="PAST">
-            Past History ({Array.isArray(requests) ? requests.filter((r: any) => ['COMPLETED', 'CANCELLED'].includes(r.status)).length : 0})
-          </TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value={filter} className="mt-4">
-          {filteredRequests.length === 0 ? (
-            <Card className="p-12 flex flex-col items-center justify-center text-center">
-              <Ambulance className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium">No bookings found</h3>
-              <p className="text-sm text-muted-foreground">You don&apos;t have any {filter.toLowerCase()} ambulance bookings yet.</p>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {filteredRequests.map((req: any) => {
-                const payment = getPaymentObj(req);
-                const amount = Number(payment?.amount || req.amount || 0);
-                const isPaid = payment?.status === "SUCCESS" || payment?.status === "PAID" || req.paymentStatus === "SUCCESS";
-                const isBilled = !isPaid && payment && amount > 0;
-                const assignedAmb = req.ambulance || req.dispatch?.ambulance;
-                const assignedDriver = req.driver || req.dispatch?.driver;
+      {/* Dynamic Overview Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Total Dispatches"
+          value={summary.totalRequests ?? 0}
+          subtitle="All submitted ambulance calls"
+          icon={Ambulance}
+          accent="primary"
+        />
+        <StatCard
+          title="Active Missions"
+          value={summary.activeRequests ?? 0}
+          subtitle="Currently pending or in transit"
+          icon={Activity}
+          accent="amber"
+        />
+        <StatCard
+          title="Completed Trips"
+          value={summary.completedRequests ?? 0}
+          subtitle="Safely delivered to hospital"
+          icon={CheckCircle2}
+          accent="emerald"
+        />
+        <StatCard
+          title="Total Paid"
+          value={`$${Number(summary.totalPaid || 0).toFixed(2)}`}
+          subtitle={`$${Number(summary.pendingAmount || 0).toFixed(2)} awaiting payment`}
+          icon={DollarSign}
+          accent="navy"
+        />
+      </div>
 
+      {/* 3 Dynamic Charts */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <TrendLineChart
+          title="Monthly Dispatch Activity"
+          description="Your emergency bookings and billing volume over the last 6 months"
+          data={stats?.monthlyTrend || []}
+          lines={[
+            { dataKey: "requests", name: "Bookings", color: "var(--chart-1)", yAxisId: "left" },
+            { dataKey: "amount", name: "Billed ($)", color: "var(--chart-2)", yAxisId: "right" },
+          ]}
+        />
+
+        <CategoryBarChart
+          title="Dispatches by Status"
+          description="Live breakdown of your emergency missions across dispatch milestones"
+          data={stats?.statusBreakdown || []}
+          xKey="name"
+          bars={[{ dataKey: "value", name: "Missions", color: "var(--chart-3)" }]}
+        />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-12">
+        <div className="lg:col-span-5">
+          <BreakdownPieChart
+            title="Requests by Criticality"
+            description="Urgency tiers selected across your bookings"
+            data={stats?.criticalityBreakdown || []}
+          />
+        </div>
+
+        <Card className="lg:col-span-7 rounded-xl border border-border/80 bg-card shadow-xs">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-semibold">Recent Bookings</CardTitle>
+              <CardDescription>Live ambulance status and billing actions</CardDescription>
+            </div>
+            <Link href="/dashboard/bookings">
+              <Button variant="ghost" size="sm" className="gap-1 text-primary">
+                All Bookings
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {recentList.length === 0 ? (
+              <div className="py-10 text-center space-y-2">
+                <p className="text-sm font-medium text-foreground">No ambulance bookings yet</p>
+                <p className="text-xs text-muted-foreground">
+                  Submit an emergency request anytime — zero upfront payment required.
+                </p>
+                <Link href="/dashboard/request">
+                  <Button size="sm" className="mt-2">
+                    Request Emergency Ambulance
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              recentList.map((req: DispatchRequestItem) => {
+                const amount = Number(req.payment?.amount || req.amount || 0);
+                const isPaid =
+                  req.payment?.status === "SUCCESS" || req.paymentStatus === "SUCCESS";
+                const isBilled = !isPaid && amount > 0;
                 return (
-                  <Card key={req.id}>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <div
+                    key={req.id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/25 p-3.5 text-sm"
+                  >
+                    <div className="space-y-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <CardTitle className="text-lg">Dispatch #{req.id?.substring(0, 8).toUpperCase()}</CardTitle>
-                        <Badge variant={req.priority === "CRITICAL" || req.priority === "HIGH" ? "destructive" : "outline"}>
+                        <span className="font-mono text-xs font-semibold">
+                          #{req.id?.slice(0, 8).toUpperCase()}
+                        </span>
+                        <Badge
+                          variant={
+                            req.priority === "CRITICAL" || req.priority === "HIGH"
+                              ? "destructive"
+                              : "secondary"
+                          }
+                        >
                           {req.priority}
                         </Badge>
+                        <Badge variant="outline">{req.status}</Badge>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {isPaid ? (
-                          <Badge className="bg-emerald-600">Paid: ${amount.toFixed(2)}</Badge>
-                        ) : isBilled ? (
-                          <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                            Bill Due: ${amount.toFixed(2)}
-                          </Badge>
-                        ) : null}
-                        <Badge variant={req.status === "COMPLETED" ? "secondary" : "default"}>
-                          {req.status}
+                      <p className="text-xs text-muted-foreground truncate">
+                        {req.pickupAddress} → {req.destinationAddress}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {isPaid ? (
+                        <Badge className="bg-emerald-600 text-white border-transparent">
+                          Paid ${amount.toFixed(2)}
                         </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-2 pt-2">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Clock className="h-4 w-4" /> {new Date(req.createdAt).toLocaleString()}
-                      </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <MapPin className="h-4 w-4 text-blue-600" />
-                        <span className="text-muted-foreground">Pickup:</span>
-                        <span className="font-medium">{req.pickupAddress || req.pickupLocation}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <MapPin className="h-4 w-4 text-emerald-600" />
-                        <span className="text-muted-foreground">Destination:</span>
-                        <span className="font-medium">{req.destinationAddress || req.dropoffLocation}</span>
-                      </div>
-                      {assignedAmb && (
-                        <div className="flex flex-wrap items-center gap-4 pt-2 text-xs text-blue-800 bg-blue-50/80 px-3 py-2 rounded-md border border-blue-100">
-                          <span className="flex items-center gap-1 font-medium">
-                            <Truck className="h-3.5 w-3.5" />
-                            Ambulance: {assignedAmb.vehicleNumber} ({assignedAmb.type})
-                          </span>
-                          {assignedDriver && (
-                            <span className="flex items-center gap-1">
-                              <User className="h-3.5 w-3.5" />
-                              Driver: {assignedDriver.profile?.firstName ? `${assignedDriver.profile.firstName} (${assignedDriver.email})` : assignedDriver.email}
-                            </span>
-                          )}
-                        </div>
+                      ) : isBilled && req.status === "COMPLETED" ? (
+                        <Button
+                          size="xs"
+                          disabled={payMutation.isPending}
+                          onClick={() => payMutation.mutate(req.id)}
+                          className="gap-1"
+                        >
+                          <CreditCard className="h-3 w-3" />
+                          Pay ${amount.toFixed(2)}
+                        </Button>
+                      ) : (
+                        <Link href="/dashboard/bookings">
+                          <Button size="xs" variant="outline">
+                            Details
+                          </Button>
+                        </Link>
                       )}
-                    </CardContent>
-                    {req.status === "COMPLETED" && (
-                      <CardFooter className="bg-muted/50 py-3 flex flex-wrap justify-between items-center gap-2">
-                        {isPaid ? (
-                          <span className="text-sm font-medium text-emerald-600">
-                            Payment Completed (${amount.toFixed(2)})
-                          </span>
-                        ) : isBilled ? (
-                          <span className="text-sm font-medium text-blue-700">
-                            Admin generated a bill of ${amount.toFixed(2)}. Ready for payment.
-                          </span>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">
-                            Trip Completed — Waiting for Admin to generate bill
-                          </span>
-                        )}
-
-                        <div className="flex items-center gap-2">
-                          {isBilled && (
-                            <Button
-                              size="sm"
-                              className="gap-1.5"
-                              disabled={payMutation.isPending}
-                              onClick={() => payMutation.mutate(req.id)}
-                            >
-                              <CreditCard className="h-4 w-4" />
-                              Pay Now (${amount.toFixed(2)})
-                            </Button>
-                          )}
-                          <Link href="/dashboard/payments">
-                            <Button size="sm" variant="outline" className="gap-1.5">
-                              View in Payments
-                            </Button>
-                          </Link>
-                        </div>
-                      </CardFooter>
-                    )}
-                  </Card>
+                    </div>
+                  </div>
                 );
-              })}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+              })
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

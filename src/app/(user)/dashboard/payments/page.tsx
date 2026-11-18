@@ -1,19 +1,29 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { CreditCard } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
+import type { DispatchRequestItem } from "@/types";
 
 export default function UserPaymentsPage() {
-  const { data: requests, isPending } = useQuery({
-    queryKey: ['my-requests'],
+  const [filter, setFilter] = useState("ALL");
+
+  const { data: requests, isPending } = useQuery<DispatchRequestItem[]>({
+    queryKey: ["my-requests"],
     queryFn: async () => {
-      const res = await api.get('/requests/my-requests');
+      const res = await api.get("/requests/my-requests");
       return res.data.data || [];
     },
     refetchInterval: 8000,
@@ -22,151 +32,154 @@ export default function UserPaymentsPage() {
   const payMutation = useMutation({
     mutationFn: async (requestId: string) => {
       const originUrl = typeof window !== "undefined" ? window.location.origin : undefined;
-      const res = await api.post('/payments/initiate', { requestId, originUrl });
+      const res = await api.post("/payments/initiate", { requestId, originUrl });
       return res.data?.data || res.data;
     },
     onSuccess: (data) => {
-      if (data?.url) {
-        window.location.href = data.url;
-      } else {
-        toast.success("Payment initiated successfully");
-      }
+      if (data?.url) window.location.href = data.url;
+      else toast.success("Payment initiated");
     },
-    onError: (error: any) => {
-      const apiErr = error.response?.data;
-      let msg = apiErr?.message || "Failed to initiate payment";
-      if (apiErr?.errors && apiErr.errors.length > 0) {
-        msg += ` - ${apiErr.errors.map((e: any) => e.message || e.msg).join(', ')}`;
-      }
-      toast.error(msg);
-    }
+    onError: (error: unknown) => {
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || "Failed to initiate payment");
+    },
   });
 
-  if (isPending) {
-    return (
-      <div className="flex-1 space-y-4 p-8 pt-6">
-        <Skeleton className="h-9 w-56" />
-        <Skeleton className="h-4 w-96" />
-        <div className="rounded-md border bg-card mt-4 p-4 space-y-3">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-        </div>
-      </div>
-    );
-  }
-
-  const getPaymentObj = (req: any) => {
-    if (req.payment) return req.payment;
-    if (Array.isArray(req.payments) && req.payments.length > 0) {
-      return (
-        req.payments.find((p: any) => p.status === "SUCCESS") ||
-        req.payments.find((p: any) => p.status === "PENDING") ||
-        req.payments[0]
-      );
-    }
-    return null;
+  const getPayInfo = (req: DispatchRequestItem) => {
+    const p =
+      req.payment ||
+      (Array.isArray(req.payments)
+        ? req.payments.find((x) => x.status === "SUCCESS") ||
+          req.payments.find((x) => x.status === "PENDING") ||
+          req.payments[0]
+        : null);
+    const amount = Number(p?.amount || req.amount || 0);
+    const isPaid =
+      p?.status === "SUCCESS" || p?.status === "PAID" || req.paymentStatus === "SUCCESS";
+    const isBilled = !isPaid && amount > 0;
+    return { amount, isPaid, isBilled, state: isPaid ? "PAID" : isBilled ? "BILLED" : "UNBILLED" };
   };
 
-  const allRequests = Array.isArray(requests) ? requests : [];
-  const allBookings = [...allRequests].sort((a, b) => {
-    return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-  });
+  let rows = Array.isArray(requests) ? [...requests] : [];
+  if (filter !== "ALL") {
+    rows = rows.filter((r) => getPayInfo(r).state === filter);
+  }
+
+  const columns: ColumnDef<DispatchRequestItem>[] = [
+    {
+      key: "id",
+      header: "Dispatch ID",
+      sortable: true,
+      sortValue: (r) => new Date(r.createdAt || 0).getTime(),
+      cell: (r) => (
+        <div>
+          <p className="font-mono text-xs font-semibold">#{r.id?.slice(0, 8).toUpperCase()}</p>
+          <p className="text-[11px] text-muted-foreground">
+            {new Date(r.createdAt).toLocaleDateString()}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "route",
+      header: "Route",
+      cell: (r) => (
+        <span className="text-xs text-muted-foreground block max-w-[240px] truncate">
+          {r.pickupAddress} → {r.destinationAddress}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Trip Status",
+      cell: (r) => <Badge variant="outline">{r.status}</Badge>,
+    },
+    {
+      key: "amount",
+      header: "Amount",
+      sortable: true,
+      sortValue: (r) => getPayInfo(r).amount,
+      cell: (r) => {
+        const { amount } = getPayInfo(r);
+        return amount > 0 ? (
+          <span className="font-semibold text-brand-emerald">${amount.toFixed(2)}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        );
+      },
+    },
+    {
+      key: "payStatus",
+      header: "Payment Status",
+      cell: (r) => {
+        const { isPaid, isBilled } = getPayInfo(r);
+        if (isPaid)
+          return <Badge className="bg-emerald-600 text-white border-transparent">Paid</Badge>;
+        if (isBilled) return <Badge variant="secondary">Billed (Due)</Badge>;
+        return <Badge variant="outline">Unbilled</Badge>;
+      },
+    },
+    {
+      key: "action",
+      header: "Action",
+      className: "text-right",
+      cell: (r) => {
+        const { amount, isPaid, isBilled } = getPayInfo(r);
+        if (isPaid) return <span className="text-xs font-medium text-brand-emerald">Paid</span>;
+        if (isBilled && r.status === "COMPLETED") {
+          return (
+            <Button
+              size="xs"
+              className="gap-1"
+              disabled={payMutation.isPending}
+              onClick={() => payMutation.mutate(r.id)}
+            >
+              <CreditCard className="h-3.5 w-3.5" />
+              Pay ${amount.toFixed(2)}
+            </Button>
+          );
+        }
+        return (
+          <span className="text-xs text-muted-foreground">
+            {r.status === "COMPLETED" ? "Awaiting Admin Bill" : "In Progress"}
+          </span>
+        );
+      },
+    },
+  ];
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
+    <div className="flex-1 space-y-6 p-4 sm:p-8">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Payments & Billing</h2>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+          Payments & Billing
+        </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          View all current and past bookings, billed amounts from Admin, and complete your pending payments.
+          View itemized post-trip invoices and complete pending payments securely via Stripe.
         </p>
       </div>
 
-      <div className="rounded-md border bg-card mt-4">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Dispatch ID</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Route</TableHead>
-              <TableHead>Request Status</TableHead>
-              <TableHead>Amount Billed</TableHead>
-              <TableHead>Payment Status</TableHead>
-              <TableHead className="text-right">Action</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {allBookings.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                  No bookings or payment records found.
-                </TableCell>
-              </TableRow>
-            ) : (
-              allBookings.map((req: any) => {
-                const payment = getPaymentObj(req);
-                const amount = Number(payment?.amount || req.amount || 0);
-                const isPaid = payment?.status === 'SUCCESS' || payment?.status === 'PAID' || req.paymentStatus === 'SUCCESS';
-                const isBilled = !isPaid && payment && amount > 0;
-                
-                return (
-                  <TableRow key={req.id}>
-                    <TableCell className="font-medium">#{req.id?.substring(0, 8).toUpperCase()}</TableCell>
-                    <TableCell>{new Date(req.createdAt || req.updatedAt || 0).toLocaleDateString()}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground max-w-[220px] truncate">
-                      {req.pickupAddress} → {req.destinationAddress}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{req.status}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      {amount > 0 ? (
-                        <span className="font-semibold text-emerald-600">${amount.toFixed(2)}</span>
-                      ) : (
-                        <span className="text-muted-foreground">--</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {isPaid ? (
-                        <Badge className="bg-emerald-600 hover:bg-emerald-700">Paid (Completed)</Badge>
-                      ) : isBilled ? (
-                        <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                          Billed (Needs Payment)
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-yellow-600 border-yellow-600">
-                          Unbilled
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {isPaid ? (
-                        <Badge variant="outline" className="border-emerald-600 text-emerald-700">
-                          Paid
-                        </Badge>
-                      ) : isBilled && req.status === "COMPLETED" ? (
-                        <Button 
-                          size="sm" 
-                          className="gap-1.5"
-                          disabled={payMutation.isPending}
-                          onClick={() => payMutation.mutate(req.id)}
-                        >
-                          <CreditCard className="h-3.5 w-3.5" />
-                          Pay Now (${amount.toFixed(2)})
-                        </Button>
-                      ) : req.status === "COMPLETED" ? (
-                        <span className="text-xs text-muted-foreground">Awaiting Admin Bill</span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Trip In Progress</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable
+        data={rows}
+        columns={columns}
+        rowKey={(r) => r.id}
+        isLoading={isPending}
+        searchPlaceholder="Search dispatch ID or route..."
+        searchAccessor={(r) => `${r.id} ${r.pickupAddress || ""} ${r.destinationAddress || ""}`}
+        filterSlot={
+          <Select value={filter} onValueChange={(v) => setFilter(v || "ALL")}>
+            <SelectTrigger className="w-[155px] h-10 rounded-xl">
+              <SelectValue placeholder="All Payments" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All Records</SelectItem>
+              <SelectItem value="BILLED">Due for Payment</SelectItem>
+              <SelectItem value="PAID">Paid</SelectItem>
+              <SelectItem value="UNBILLED">Unbilled</SelectItem>
+            </SelectContent>
+          </Select>
+        }
+      />
     </div>
   );
 }

@@ -1,21 +1,28 @@
 "use client";
 
+import { Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/axios";
+import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/axios";
-import { toast } from "sonner";
-import { useRouter } from "next/navigation";
-import { Ambulance, MapPin, Phone } from "lucide-react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Ambulance, Loader2, MapPin, Phone, ShieldCheck } from "lucide-react";
 
 const createRequestSchema = z.object({
-  patientPhone: z.string().min(5, "Patient phone number is required"),
+  patientPhone: z.string().min(5, "Valid patient contact phone is required"),
   pickupAddress: z.string().min(3, "Pickup address is required"),
   destinationAddress: z.string().min(3, "Destination hospital or address is required"),
   priority: z.enum(["CRITICAL", "HIGH", "MEDIUM", "LOW"]),
@@ -23,9 +30,19 @@ const createRequestSchema = z.object({
 
 type CreateRequestFormValues = z.infer<typeof createRequestSchema>;
 
-export default function RequestAmbulancePage() {
+function RequestFormContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+
+  const rawPriority = searchParams.get("priority");
+  const initialPriority: CreateRequestFormValues["priority"] =
+    rawPriority === "CRITICAL" ||
+    rawPriority === "HIGH" ||
+    rawPriority === "MEDIUM" ||
+    rawPriority === "LOW"
+      ? rawPriority
+      : "HIGH";
 
   const {
     register,
@@ -39,7 +56,7 @@ export default function RequestAmbulancePage() {
       patientPhone: "",
       pickupAddress: "",
       destinationAddress: "",
-      priority: "HIGH",
+      priority: initialPriority,
     },
   });
 
@@ -47,52 +64,58 @@ export default function RequestAmbulancePage() {
 
   const requestMutation = useMutation({
     mutationFn: async (data: CreateRequestFormValues) => {
-      const res = await api.post('/requests', data);
+      const res = await api.post("/requests", data);
       return res.data;
     },
     onSuccess: () => {
-      toast.success("Emergency request submitted! An admin will allocate an ambulance shortly.");
-      queryClient.invalidateQueries({ queryKey: ['my-requests'] });
-      router.push("/dashboard");
+      toast.success("Emergency request submitted! A coordinator is allocating your ambulance.");
+      queryClient.invalidateQueries({ queryKey: ["my-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["patient-stats"] });
+      router.push("/dashboard/bookings");
     },
-    onError: (error: any) => {
-      const apiError = error.response?.data;
-      let errorMessage = apiError?.message || "Failed to request ambulance";
-      if (apiError?.errors && apiError.errors.length > 0) {
-        errorMessage = apiError.errors[0].message;
-      }
-      toast.error(errorMessage);
-    }
+    onError: (error: unknown) => {
+      const err = error as {
+        response?: { data?: { message?: string; errors?: Array<{ message: string }> } };
+      };
+      const apiErr = err.response?.data;
+      toast.error(apiErr?.errors?.[0]?.message || apiErr?.message || "Failed to request ambulance");
+    },
   });
 
-  const onSubmit = (values: CreateRequestFormValues) => {
-    requestMutation.mutate(values);
-  };
-
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Request Ambulance</h2>
+    <div className="flex-1 space-y-6 p-4 sm:p-8">
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+          Request Emergency Ambulance
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Submit your location and clinical urgency. Zero upfront payment required.
+        </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 mt-4">
-        <Card>
+      <div className="grid gap-6 lg:grid-cols-12 items-start">
+        <Card className="lg:col-span-7 rounded-xl border border-border bg-card shadow-xs">
           <CardHeader>
-            <CardTitle>Emergency Dispatch</CardTitle>
+            <CardTitle>Emergency Dispatch Form</CardTitle>
             <CardDescription>
-              Fill out the details below to dispatch the nearest available ambulance immediately.
+              High & Critical priorities automatically match to ventilator-equipped Mobile ICU units.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Patient Phone Number</Label>
+            <form
+              onSubmit={handleSubmit((vals) => requestMutation.mutate(vals))}
+              className="space-y-4"
+              noValidate
+            >
+              <div className="space-y-1.5">
+                <Label htmlFor="req-phone">Patient / Caller Phone Number</Label>
                 <div className="relative">
-                  <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    id="phone" 
-                    placeholder="e.g. +1 234 567 890" 
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="req-phone"
+                    placeholder="+1 (555) 234-5678"
                     className="pl-9"
+                    aria-invalid={Boolean(errors.patientPhone)}
                     {...register("patientPhone")}
                   />
                 </div>
@@ -101,14 +124,15 @@ export default function RequestAmbulancePage() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="pickup">Pickup Location</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="req-pickup">Pickup Address</Label>
                 <div className="relative">
-                  <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    id="pickup" 
-                    placeholder="Enter pickup address or coordinates" 
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
+                  <Input
+                    id="req-pickup"
+                    placeholder="742 Parkview Avenue, Apt 4B"
                     className="pl-9"
+                    aria-invalid={Boolean(errors.pickupAddress)}
                     {...register("pickupAddress")}
                   />
                 </div>
@@ -116,15 +140,16 @@ export default function RequestAmbulancePage() {
                   <p className="text-xs text-destructive">{errors.pickupAddress.message}</p>
                 )}
               </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="dropoff">Destination (Hospital)</Label>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="req-dropoff">Destination Hospital</Label>
                 <div className="relative">
-                  <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    id="dropoff" 
-                    placeholder="Enter hospital name or address" 
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-emerald" />
+                  <Input
+                    id="req-dropoff"
+                    placeholder="Metro General Trauma Center"
                     className="pl-9"
+                    aria-invalid={Boolean(errors.destinationAddress)}
                     {...register("destinationAddress")}
                   />
                 </div>
@@ -133,54 +158,90 @@ export default function RequestAmbulancePage() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="priority">Criticality / Urgency Level</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="req-priority">Clinical Criticality Level</Label>
                 <Select
                   value={priority}
-                  onValueChange={(val) => setValue("priority", (val as CreateRequestFormValues["priority"]) || "HIGH", { shouldValidate: true })}
+                  onValueChange={(val) =>
+                    setValue("priority", (val as CreateRequestFormValues["priority"]) || "HIGH", {
+                      shouldValidate: true,
+                    })
+                  }
                 >
-                  <SelectTrigger id="priority">
+                  <SelectTrigger id="req-priority" className="w-full h-10 rounded-xl">
                     <SelectValue placeholder="Select urgency" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="CRITICAL">Critical (Life-threatening — ICU Unit)</SelectItem>
-                    <SelectItem value="HIGH">High (Urgent care needed — ICU Unit)</SelectItem>
-                    <SelectItem value="MEDIUM">Medium (Non-life threatening — Basic Unit)</SelectItem>
-                    <SelectItem value="LOW">Low (Routine transport — Basic Unit)</SelectItem>
+                    <SelectItem value="CRITICAL">
+                      Critical — Life-Threatening (Mobile ICU Required)
+                    </SelectItem>
+                    <SelectItem value="HIGH">
+                      High — Urgent Clinical Stabilization (Mobile ICU Required)
+                    </SelectItem>
+                    <SelectItem value="MEDIUM">
+                      Medium — Urgent Medical Transport (Basic Life Support)
+                    </SelectItem>
+                    <SelectItem value="LOW">
+                      Low — Scheduled / Routine Transfer (Basic Life Support)
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <Button 
-                type="submit" 
-                className="w-full mt-6" 
+              <Button
+                type="submit"
                 size="lg"
+                className="w-full mt-2 gap-2"
                 disabled={requestMutation.isPending}
               >
-                <Ambulance className="mr-2 h-5 w-5" />
-                {requestMutation.isPending ? "Dispatching..." : "Request Emergency Ambulance"}
+                {requestMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Dispatching Request...
+                  </>
+                ) : (
+                  <>
+                    <Ambulance className="h-5 w-5" />
+                    Submit Emergency Dispatch Request
+                  </>
+                )}
               </Button>
             </form>
           </CardContent>
         </Card>
 
-        <Card className="bg-muted/30 border-dashed">
+        <Card className="lg:col-span-5 rounded-xl border border-border bg-muted/30 shadow-xs">
           <CardHeader>
-            <CardTitle className="text-xl flex items-center gap-2">
-              <Phone className="h-5 w-5 text-primary" />
-              Need Help?
+            <CardTitle className="text-lg flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-brand-emerald" />
+              Dispatch Protocol Notice
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 text-sm text-muted-foreground">
+          <CardContent className="space-y-3 text-sm text-muted-foreground leading-relaxed">
             <p>
-              If this is a life-threatening emergency and the platform is unresponsive, please immediately dial your local emergency number (e.g., 911).
+              If this is an immediate life-threatening emergency and connectivity is unstable, also
+              dial your local emergency hotline (911).
             </p>
             <p>
-              Once you submit your request, an administrator will allocate an ambulance based on your criticality level, and your assigned driver will update your trip status in real time.
+              Once submitted, our Admin Command Desk allocates an available criticality-matched
+              ambulance and certified driver. Track live milestones directly in{" "}
+              <strong className="text-foreground">My Bookings</strong>.
+            </p>
+            <p className="text-xs pt-2 border-t border-border/70">
+              No credit card is requested during booking. Bills are generated only after hospital
+              handover.
             </p>
           </CardContent>
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function RequestAmbulancePage() {
+  return (
+    <Suspense fallback={<div className="p-8" />}>
+      <RequestFormContent />
+    </Suspense>
   );
 }
