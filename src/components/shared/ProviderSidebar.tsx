@@ -15,7 +15,12 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
-import { useAppStore } from "@/lib/store";
+import {
+  useIsSidebarOpen,
+  useSetSidebarOpen,
+  useSetUserRole,
+  useToggleSidebar,
+} from "@/lib/store";
 import { useEffect } from "react";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -29,7 +34,10 @@ const routes = [
 
 export function ProviderSidebar() {
   const pathname = usePathname();
-  const { isSidebarOpen, toggleSidebar, setSidebarOpen, setUserRole } = useAppStore();
+  const isSidebarOpen = useIsSidebarOpen();
+  const toggleSidebar = useToggleSidebar();
+  const setSidebarOpen = useSetSidebarOpen();
+  const setUserRole = useSetUserRole();
 
   useEffect(() => {
     setUserRole("provider");

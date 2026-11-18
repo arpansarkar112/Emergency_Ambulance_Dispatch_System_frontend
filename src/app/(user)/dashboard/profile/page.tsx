@@ -1,7 +1,6 @@
-"use client";
-
 import { ProfileManager } from "@/components/shared/ProfileManager";
 
+// React Server Component page passing serializable props to Client Component boundary
 export default function UserProfilePage() {
   return (
     <ProfileManager

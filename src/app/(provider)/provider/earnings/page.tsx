@@ -1,6 +1,6 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import React, { Suspense, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
 import { StatCard } from "@/components/shared/StatCard";
@@ -11,10 +11,20 @@ import { useSession } from "next-auth/react";
 import { Clock, DollarSign, TrendingUp } from "lucide-react";
 import type { DispatchRequestItem } from "@/types";
 
-const TrendLineChart = dynamic(
-  () => import("@/components/shared/DashboardCharts").then((m) => m.TrendLineChart),
-  { ssr: false, loading: () => <Skeleton className="h-[340px] w-full rounded-xl" /> }
+// Code-split ONLY TrendLineChart so BarChart and PieChart are excluded from /provider/earnings bundle
+const TrendLineChart = React.lazy(
+  () => import("@/components/shared/charts/TrendLineChart")
 );
+
+const EARNINGS_TREND_LINES = [
+  { dataKey: "requests", name: "Dispatches", color: "var(--chart-1)" },
+  { dataKey: "amount", name: "Trip Volume ($)", color: "var(--chart-3)" },
+];
+
+const getAmount = (r: DispatchRequestItem) =>
+  Number(r.payment?.amount || r.amount || 0);
+const isPaid = (r: DispatchRequestItem) =>
+  r.payment?.status === "SUCCESS" || r.paymentStatus === "SUCCESS";
 
 export default function ProviderEarningsPage() {
   const { data: session } = useSession();
@@ -39,70 +49,92 @@ export default function ProviderEarningsPage() {
     enabled: Boolean(userId),
   });
 
-  const completedTrips = (Array.isArray(requests) ? requests : []).filter(
-    (r) => r.status === "COMPLETED"
+  const { completedTrips, totalEarnings, pendingEarnings } = useMemo(() => {
+    const completed = (Array.isArray(requests) ? requests : []).filter(
+      (r) => r.status === "COMPLETED"
+    );
+    const paidSum = completed
+      .filter(isPaid)
+      .reduce((sum: number, r) => sum + getAmount(r), 0);
+    const pendingSum = completed
+      .filter((r) => !isPaid(r) && getAmount(r) > 0)
+      .reduce((sum: number, r) => sum + getAmount(r), 0);
+    return {
+      completedTrips: completed,
+      totalEarnings: paidSum,
+      pendingEarnings: pendingSum,
+    };
+  }, [requests]);
+
+  const rowKey = useCallback((r: DispatchRequestItem) => r.id, []);
+  const searchAccessor = useCallback(
+    (r: DispatchRequestItem) =>
+      `${r.id} ${r.pickupAddress || ""} ${r.destinationAddress || ""}`,
+    []
   );
 
-  const getAmount = (r: DispatchRequestItem) => Number(r.payment?.amount || r.amount || 0);
-  const isPaid = (r: DispatchRequestItem) =>
-    r.payment?.status === "SUCCESS" || r.paymentStatus === "SUCCESS";
-
-  const totalEarnings = completedTrips
-    .filter(isPaid)
-    .reduce((sum: number, r) => sum + getAmount(r), 0);
-  const pendingEarnings = completedTrips
-    .filter((r) => !isPaid(r) && getAmount(r) > 0)
-    .reduce((sum: number, r) => sum + getAmount(r), 0);
-
-  const columns: ColumnDef<DispatchRequestItem>[] = [
-    {
-      key: "id",
-      header: "Dispatch",
-      sortable: true,
-      sortValue: (r) => new Date(r.updatedAt || r.createdAt || 0).getTime(),
-      cell: (r) => (
-        <div>
-          <p className="font-mono text-xs font-semibold">#{r.id?.slice(0, 8).toUpperCase()}</p>
-          <p className="text-[11px] text-muted-foreground">
-            {new Date(r.updatedAt || r.createdAt).toLocaleDateString()}
-          </p>
-        </div>
-      ),
-    },
-    {
-      key: "route",
-      header: "Route",
-      cell: (r) => (
-        <span className="text-xs text-muted-foreground block max-w-[260px] truncate">
-          {r.pickupAddress} → {r.destinationAddress}
-        </span>
-      ),
-    },
-    {
-      key: "amount",
-      header: "Trip Bill",
-      sortable: true,
-      sortValue: (r) => getAmount(r),
-      cell: (r) => {
-        const amt = getAmount(r);
-        return amt > 0 ? (
-          <span className="font-semibold text-brand-emerald">${amt.toFixed(2)}</span>
-        ) : (
-          <span className="text-xs text-muted-foreground">Unbilled</span>
-        );
+  const columns = useMemo<ColumnDef<DispatchRequestItem>[]>(
+    () => [
+      {
+        key: "id",
+        header: "Dispatch",
+        sortable: true,
+        sortValue: (r) =>
+          new Date(r.updatedAt || r.createdAt || 0).getTime(),
+        cell: (r) => (
+          <div>
+            <p className="font-mono text-xs font-semibold">
+              #{r.id?.slice(0, 8).toUpperCase()}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              {new Date(r.updatedAt || r.createdAt).toLocaleDateString()}
+            </p>
+          </div>
+        ),
       },
-    },
-    {
-      key: "status",
-      header: "Settlement",
-      cell: (r) => {
-        if (isPaid(r))
-          return <Badge className="bg-emerald-600 text-white border-transparent">Paid</Badge>;
-        if (getAmount(r) > 0) return <Badge variant="secondary">Pending Patient Payment</Badge>;
-        return <Badge variant="outline">Awaiting Admin Bill</Badge>;
+      {
+        key: "route",
+        header: "Route",
+        cell: (r) => (
+          <span className="text-xs text-muted-foreground block max-w-[260px] truncate">
+            {r.pickupAddress} → {r.destinationAddress}
+          </span>
+        ),
       },
-    },
-  ];
+      {
+        key: "amount",
+        header: "Trip Bill",
+        sortable: true,
+        sortValue: (r) => getAmount(r),
+        cell: (r) => {
+          const amt = getAmount(r);
+          return amt > 0 ? (
+            <span className="font-semibold text-brand-emerald">
+              ${amt.toFixed(2)}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">Unbilled</span>
+          );
+        },
+      },
+      {
+        key: "status",
+        header: "Settlement",
+        cell: (r) => {
+          if (isPaid(r))
+            return (
+              <Badge className="bg-emerald-600 text-white border-transparent">
+                Paid
+              </Badge>
+            );
+          if (getAmount(r) > 0)
+            return <Badge variant="secondary">Pending Patient Payment</Badge>;
+          return <Badge variant="outline">Awaiting Admin Bill</Badge>;
+        },
+      },
+    ],
+    []
+  );
 
   return (
     <div className="flex-1 space-y-6 p-4 sm:p-8">
@@ -111,7 +143,8 @@ export default function ProviderEarningsPage() {
           Earnings & Trip Analytics
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Track settled Stripe trip payouts, pending patient invoices, and monthly volume.
+          Track settled Stripe trip payouts, pending patient invoices, and
+          monthly volume.
         </p>
       </div>
 
@@ -139,23 +172,23 @@ export default function ProviderEarningsPage() {
         />
       </div>
 
-      <TrendLineChart
-        title="Monthly Completed Missions & Billing ($)"
-        description="Dynamic 6-month trend based on your assigned emergency missions"
-        data={stats?.monthlyTrend || []}
-        lines={[
-          { dataKey: "requests", name: "Dispatches", color: "var(--chart-1)" },
-          { dataKey: "amount", name: "Trip Volume ($)", color: "var(--chart-3)" },
-        ]}
-      />
+      <Suspense fallback={<Skeleton className="h-[366px] w-full rounded-xl" />}>
+        <TrendLineChart
+          title="Monthly Completed Missions & Billing ($)"
+          description="Dynamic 6-month trend based on your assigned emergency missions"
+          data={stats?.monthlyTrend || []}
+          lines={EARNINGS_TREND_LINES}
+        />
+      </Suspense>
 
       <DataTable
         data={completedTrips}
         columns={columns}
-        rowKey={(r) => r.id}
+        rowKey={rowKey}
         isLoading={isLoading}
-        searchPlaceholder="Search completed trips..."
-        searchAccessor={(r) => `${r.id} ${r.pickupAddress || ""} ${r.destinationAddress || ""}`}
+        searchPlaceholder="Search completed trips (debounced)..."
+        searchAccessor={searchAccessor}
+        profilerId="ProviderEarningsDataTable"
       />
     </div>
   );

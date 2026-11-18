@@ -12,6 +12,16 @@ const resolvedApiBase = (
 ).replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
+  experimental: {
+    optimizePackageImports: [
+      "@base-ui/react",
+      "@tanstack/react-query",
+      "@tanstack/react-virtual",
+      "lucide-react",
+      "recharts",
+      "sonner",
+    ],
+  },
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [

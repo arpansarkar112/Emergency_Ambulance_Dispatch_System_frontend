@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { HelpCircle, PhoneCall, Search, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useDebounce } from "@/hooks/use-debounce";
 
 const HELP_TOPICS = [
   {
@@ -44,13 +45,18 @@ const HELP_TOPICS = [
 
 export default function HelpPage() {
   const [query, setQuery] = useState("");
-  const filtered = HELP_TOPICS.filter(
-    (item) =>
-      !query.trim() ||
-      item.q.toLowerCase().includes(query.toLowerCase()) ||
-      item.a.toLowerCase().includes(query.toLowerCase()) ||
-      item.category.toLowerCase().includes(query.toLowerCase())
-  );
+  const debouncedQuery = useDebounce(query, 250);
+
+  const filtered = useMemo(() => {
+    const q = debouncedQuery.toLowerCase().trim();
+    if (!q) return HELP_TOPICS;
+    return HELP_TOPICS.filter(
+      (item) =>
+        item.q.toLowerCase().includes(q) ||
+        item.a.toLowerCase().includes(q) ||
+        item.category.toLowerCase().includes(q)
+    );
+  }, [debouncedQuery]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -81,7 +87,10 @@ export default function HelpPage() {
       <section className="container mx-auto px-4 md:px-6 py-12 max-w-4xl space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {filtered.map((item) => (
-            <Card key={item.q} className="rounded-xl border border-border/80 bg-card shadow-xs">
+            <Card
+              key={item.q}
+              className="rounded-xl border border-border/80 bg-card shadow-xs"
+            >
               <CardHeader className="pb-2">
                 <Badge variant="secondary" className="w-fit text-[11px]">
                   {item.category}
@@ -92,7 +101,9 @@ export default function HelpPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground leading-relaxed">{item.a}</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {item.a}
+                </p>
               </CardContent>
             </Card>
           ))}

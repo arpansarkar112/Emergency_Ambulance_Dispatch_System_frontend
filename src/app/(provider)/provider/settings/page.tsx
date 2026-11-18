@@ -1,14 +1,11 @@
-"use client";
-
-import { useTheme } from "next-themes";
 import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Monitor, Moon, Sun, Truck } from "lucide-react";
+import { ThemeSelectorCard } from "@/components/shared/ThemeSelectorCard";
+import { Truck } from "lucide-react";
 
+// React Server Component: static layout and fleet navigation shortcuts rendered on server
 export default function ProviderSettingsPage() {
-  const { theme, setTheme } = useTheme();
-
   return (
     <div className="flex-1 space-y-6 p-4 sm:p-8 max-w-3xl">
       <div>
@@ -20,43 +17,13 @@ export default function ProviderSettingsPage() {
         </p>
       </div>
 
-      <Card className="rounded-xl border border-border/80 bg-card shadow-xs">
-        <CardHeader>
-          <CardTitle>Display Theme (Day / Night Shift)</CardTitle>
-          <CardDescription>
-            Dark mode reduces cabin glare during overnight emergency transport shifts.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2.5">
-          <Button
-            variant={theme === "light" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setTheme("light")}
-            className="gap-2"
-          >
-            <Sun className="h-4 w-4" />
-            Light Mode
-          </Button>
-          <Button
-            variant={theme === "dark" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setTheme("dark")}
-            className="gap-2"
-          >
-            <Moon className="h-4 w-4" />
-            Night Shift (Dark)
-          </Button>
-          <Button
-            variant={theme === "system" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setTheme("system")}
-            className="gap-2"
-          >
-            <Monitor className="h-4 w-4" />
-            System
-          </Button>
-        </CardContent>
-      </Card>
+      <ThemeSelectorCard
+        title="Display Theme (Day / Night Shift)"
+        description="Dark mode reduces cabin glare during overnight emergency transport shifts."
+        lightLabel="Light Mode"
+        darkLabel="Night Shift (Dark)"
+        systemLabel="System"
+      />
 
       <Card className="rounded-xl border border-border/80 bg-card shadow-xs">
         <CardHeader>
