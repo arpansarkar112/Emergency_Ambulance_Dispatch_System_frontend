@@ -18,7 +18,6 @@ function PaymentSuccessContent() {
 
   useEffect(() => {
     if (!sessionId) {
-      setVerifying(false);
       return;
     }
 
@@ -34,8 +33,8 @@ function PaymentSuccessContent() {
         queryClient.invalidateQueries({ queryKey: ["admin-requests"] });
         queryClient.invalidateQueries({ queryKey: ["provider-requests"] });
       })
-      .catch((err) => {
-        console.error("Failed to verify payment session:", err);
+      .catch(() => {
+        toast.error("Could not automatically verify Stripe session. Please refresh Payments.");
       })
       .finally(() => {
         if (active) setVerifying(false);
