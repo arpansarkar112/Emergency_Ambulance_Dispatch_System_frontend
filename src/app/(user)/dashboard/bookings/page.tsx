@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import React, { Suspense, useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
+import { DatasetVolumeToggle } from "@/components/shared/DatasetVolumeToggle";
+import { mergeWithRepresentativeRequests } from "@/lib/synthetic-data";
+import { useHighVolumeMode } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -24,13 +25,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import {
   CreditCard,
   Eye,
-  Loader2,
   MapPin,
   Pencil,
   PlusCircle,
@@ -40,39 +37,17 @@ import {
 } from "lucide-react";
 import type { DispatchRequestItem } from "@/types";
 
-const editRequestSchema = z.object({
-  patientPhone: z.string().min(5, "Phone number is required"),
-  pickupAddress: z.string().min(3, "Pickup address is required"),
-  destinationAddress: z.string().min(3, "Destination address is required"),
-  priority: z.enum(["CRITICAL", "HIGH", "MEDIUM", "LOW"]),
-});
-
-type EditRequestValues = z.infer<typeof editRequestSchema>;
+// Lazy-load EditBookingDialog with colocated Zod + React Hook Form state
+const EditBookingDialog = React.lazy(
+  () => import("@/components/dashboard/modals/EditBookingDialog")
+);
 
 export default function PatientBookingsPage() {
   const queryClient = useQueryClient();
+  const highVolumeMode = useHighVolumeMode();
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [viewing, setViewing] = useState<DispatchRequestItem | null>(null);
   const [editing, setEditing] = useState<DispatchRequestItem | null>(null);
-
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    reset,
-    formState: { errors },
-  } = useForm<EditRequestValues>({
-    resolver: zodResolver(editRequestSchema),
-    defaultValues: {
-      patientPhone: "",
-      pickupAddress: "",
-      destinationAddress: "",
-      priority: "HIGH",
-    },
-  });
-
-  const editPriority = watch("priority");
 
   const { data: requests, isPending } = useQuery<DispatchRequestItem[]>({
     queryKey: ["my-requests"],
@@ -81,22 +56,6 @@ export default function PatientBookingsPage() {
       return res.data.data || [];
     },
     refetchInterval: 8000,
-  });
-
-  const editMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: EditRequestValues }) => {
-      const res = await api.patch(`/requests/${id}`, data);
-      return res.data;
-    },
-    onSuccess: () => {
-      toast.success("Emergency request updated!");
-      setEditing(null);
-      queryClient.invalidateQueries({ queryKey: ["my-requests"] });
-    },
-    onError: (error: unknown) => {
-      const err = error as { response?: { data?: { message?: string } } };
-      toast.error(err.response?.data?.message || "Failed to update request");
-    },
   });
 
   const cancelMutation = useMutation({
@@ -116,8 +75,12 @@ export default function PatientBookingsPage() {
 
   const payMutation = useMutation({
     mutationFn: async (requestId: string) => {
-      const originUrl = typeof window !== "undefined" ? window.location.origin : undefined;
-      const res = await api.post("/payments/initiate", { requestId, originUrl });
+      const originUrl =
+        typeof window !== "undefined" ? window.location.origin : undefined;
+      const res = await api.post("/payments/initiate", {
+        requestId,
+        originUrl,
+      });
       return res.data.data || res.data;
     },
     onSuccess: (data) => {
@@ -125,140 +88,176 @@ export default function PatientBookingsPage() {
     },
     onError: (error: unknown) => {
       const err = error as { response?: { data?: { message?: string } } };
-      toast.error(err.response?.data?.message || "Failed to initiate Stripe checkout");
+      toast.error(
+        err.response?.data?.message || "Failed to initiate Stripe checkout"
+      );
     },
   });
 
-  let rows = Array.isArray(requests) ? [...requests] : [];
-  if (statusFilter === "ACTIVE") {
-    rows = rows.filter((r) => !["COMPLETED", "CANCELLED"].includes(r.status));
-  } else if (statusFilter === "PAST") {
-    rows = rows.filter((r) => ["COMPLETED", "CANCELLED"].includes(r.status));
-  }
+  const combinedRequests = useMemo(() => {
+    const live = Array.isArray(requests) ? requests : [];
+    return mergeWithRepresentativeRequests(live, highVolumeMode, 1200);
+  }, [requests, highVolumeMode]);
 
-  const openEditModal = (req: DispatchRequestItem) => {
-    setEditing(req);
-    reset({
-      patientPhone: req.patientPhone || "",
-      pickupAddress: req.pickupAddress || "",
-      destinationAddress: req.destinationAddress || "",
-      priority: req.priority || "MEDIUM",
-    });
-  };
+  const rows = useMemo(() => {
+    if (statusFilter === "ACTIVE") {
+      return combinedRequests.filter(
+        (r) => !["COMPLETED", "CANCELLED"].includes(r.status)
+      );
+    }
+    if (statusFilter === "PAST") {
+      return combinedRequests.filter((r) =>
+        ["COMPLETED", "CANCELLED"].includes(r.status)
+      );
+    }
+    return combinedRequests;
+  }, [combinedRequests, statusFilter]);
 
-  const columns: ColumnDef<DispatchRequestItem>[] = [
-    {
-      key: "id",
-      header: "Dispatch",
-      sortable: true,
-      sortValue: (r) => new Date(r.createdAt || 0).getTime(),
-      cell: (r) => (
-        <div>
-          <p className="font-mono text-xs font-semibold">#{r.id?.slice(0, 8).toUpperCase()}</p>
-          <p className="text-[11px] text-muted-foreground">
-            {new Date(r.createdAt).toLocaleString()}
-          </p>
-        </div>
-      ),
-    },
-    {
-      key: "route",
-      header: "Route",
-      cell: (r) => (
-        <div className="max-w-[260px]">
-          <p className="text-xs font-medium text-foreground truncate">{r.pickupAddress}</p>
-          <p className="text-[11px] text-muted-foreground truncate">→ {r.destinationAddress}</p>
-        </div>
-      ),
-    },
-    {
-      key: "priority",
-      header: "Criticality",
-      sortable: true,
-      sortValue: (r) => r.priority,
-      cell: (r) => (
-        <Badge
-          variant={r.priority === "CRITICAL" || r.priority === "HIGH" ? "destructive" : "secondary"}
-        >
-          {r.priority}
-        </Badge>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      sortable: true,
-      sortValue: (r) => r.status,
-      cell: (r) => <Badge variant="outline">{r.status}</Badge>,
-    },
-    {
-      key: "billing",
-      header: "Billing",
-      cell: (r) => {
-        const amount = Number(r.payment?.amount || r.amount || 0);
-        const isPaid = r.payment?.status === "SUCCESS" || r.paymentStatus === "SUCCESS";
-        if (isPaid)
-          return <Badge className="bg-emerald-600 text-white border-transparent">Paid ${amount.toFixed(2)}</Badge>;
-        if (amount > 0) return <Badge variant="secondary">Due ${amount.toFixed(2)}</Badge>;
-        return <span className="text-xs text-muted-foreground">—</span>;
-      },
-    },
-    {
-      key: "actions",
-      header: "Actions",
-      className: "text-right",
-      cell: (r) => {
-        const amount = Number(r.payment?.amount || r.amount || 0);
-        const isPaid = r.payment?.status === "SUCCESS" || r.paymentStatus === "SUCCESS";
-        const isBilled = !isPaid && amount > 0;
-        return (
-          <div className="flex items-center justify-end gap-1">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setViewing(r)}
-              aria-label="View booking"
-            >
-              <Eye className="h-4 w-4" />
-            </Button>
-            {r.status === "PENDING" && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => openEditModal(r)}
-                  aria-label="Edit pending booking"
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-destructive"
-                  onClick={() => cancelMutation.mutate(r.id)}
-                  disabled={cancelMutation.isPending}
-                  aria-label="Cancel booking"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </>
-            )}
-            {isBilled && r.status === "COMPLETED" && (
-              <Button
-                size="xs"
-                className="gap-1"
-                disabled={payMutation.isPending}
-                onClick={() => payMutation.mutate(r.id)}
-              >
-                <CreditCard className="h-3 w-3" />
-                Pay
-              </Button>
-            )}
+  const rowKey = useCallback((r: DispatchRequestItem) => r.id, []);
+  const searchAccessor = useCallback(
+    (r: DispatchRequestItem) =>
+      `${r.id} ${r.pickupAddress || ""} ${r.destinationAddress || ""} ${r.status}`,
+    []
+  );
+
+  const handleCloseEdit = useCallback(() => {
+    setEditing(null);
+  }, []);
+
+  const columns = useMemo<ColumnDef<DispatchRequestItem>[]>(
+    () => [
+      {
+        key: "id",
+        header: "Dispatch",
+        sortable: true,
+        sortValue: (r) => new Date(r.createdAt || 0).getTime(),
+        cell: (r) => (
+          <div>
+            <p className="font-mono text-xs font-semibold">
+              #{r.id?.slice(0, 8).toUpperCase()}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              {new Date(r.createdAt).toLocaleString()}
+            </p>
           </div>
-        );
+        ),
       },
-    },
-  ];
+      {
+        key: "route",
+        header: "Route",
+        cell: (r) => (
+          <div className="max-w-[260px]">
+            <p className="text-xs font-medium text-foreground truncate">
+              {r.pickupAddress}
+            </p>
+            <p className="text-[11px] text-muted-foreground truncate">
+              → {r.destinationAddress}
+            </p>
+          </div>
+        ),
+      },
+      {
+        key: "priority",
+        header: "Criticality",
+        sortable: true,
+        sortValue: (r) => r.priority,
+        cell: (r) => (
+          <Badge
+            variant={
+              r.priority === "CRITICAL" || r.priority === "HIGH"
+                ? "destructive"
+                : "secondary"
+            }
+          >
+            {r.priority}
+          </Badge>
+        ),
+      },
+      {
+        key: "status",
+        header: "Status",
+        sortable: true,
+        sortValue: (r) => r.status,
+        cell: (r) => <Badge variant="outline">{r.status}</Badge>,
+      },
+      {
+        key: "billing",
+        header: "Billing",
+        cell: (r) => {
+          const amount = Number(r.payment?.amount || r.amount || 0);
+          const isPaid =
+            r.payment?.status === "SUCCESS" || r.paymentStatus === "SUCCESS";
+          if (isPaid)
+            return (
+              <Badge className="bg-emerald-600 text-white border-transparent">
+                Paid ${amount.toFixed(2)}
+              </Badge>
+            );
+          if (amount > 0)
+            return <Badge variant="secondary">Due ${amount.toFixed(2)}</Badge>;
+          return <span className="text-xs text-muted-foreground">—</span>;
+        },
+      },
+      {
+        key: "actions",
+        header: "Actions",
+        className: "text-right",
+        cell: (r) => {
+          const amount = Number(r.payment?.amount || r.amount || 0);
+          const isPaid =
+            r.payment?.status === "SUCCESS" || r.paymentStatus === "SUCCESS";
+          const isBilled = !isPaid && amount > 0;
+          const isSynthetic = r.id.startsWith("sim-");
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setViewing(r)}
+                aria-label="View booking"
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+              {!isSynthetic && r.status === "PENDING" && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => setEditing(r)}
+                    aria-label="Edit pending booking"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-destructive"
+                    onClick={() => cancelMutation.mutate(r.id)}
+                    disabled={cancelMutation.isPending}
+                    aria-label="Cancel booking"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+              {!isSynthetic && isBilled && r.status === "COMPLETED" && (
+                <Button
+                  size="xs"
+                  className="gap-1"
+                  disabled={payMutation.isPending}
+                  onClick={() => payMutation.mutate(r.id)}
+                >
+                  <CreditCard className="h-3 w-3" />
+                  Pay
+                </Button>
+              )}
+            </div>
+          );
+        },
+      },
+    ],
+    [cancelMutation, payMutation]
+  );
 
   return (
     <div className="flex-1 space-y-6 p-4 sm:p-8">
@@ -268,28 +267,34 @@ export default function PatientBookingsPage() {
             My Bookings
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Track live ambulance assignments, edit pending calls, and settle completed bills.
+            Track live ambulance assignments, edit pending calls, and settle
+            completed bills.
           </p>
         </div>
-        <Link href="/dashboard/request">
-          <Button className="gap-1.5">
-            <PlusCircle className="h-4 w-4" />
-            Request Ambulance
-          </Button>
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <DatasetVolumeToggle totalCount={combinedRequests.length} />
+          <Link href="/dashboard/request">
+            <Button className="gap-1.5">
+              <PlusCircle className="h-4 w-4" />
+              Request Ambulance
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <DataTable
         data={rows}
         columns={columns}
-        rowKey={(r) => r.id}
+        rowKey={rowKey}
         isLoading={isPending}
-        searchPlaceholder="Search address, hospital, or dispatch ID..."
-        searchAccessor={(r) =>
-          `${r.id} ${r.pickupAddress || ""} ${r.destinationAddress || ""} ${r.status}`
-        }
+        searchPlaceholder="Search address, hospital, or dispatch ID (debounced)..."
+        searchAccessor={searchAccessor}
+        profilerId="PatientBookingsDataTable"
         filterSlot={
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v || "ALL")}>
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => setStatusFilter(v || "ALL")}
+          >
             <SelectTrigger className="w-[165px] h-10 rounded-xl">
               <SelectValue placeholder="Filter bookings" />
             </SelectTrigger>
@@ -305,18 +310,26 @@ export default function PatientBookingsPage() {
       />
 
       {/* View Modal */}
-      <Dialog open={Boolean(viewing)} onOpenChange={(o) => !o && setViewing(null)}>
+      <Dialog
+        open={Boolean(viewing)}
+        onOpenChange={(o) => !o && setViewing(null)}
+      >
         <DialogContent className="sm:max-w-lg rounded-xl">
           <DialogHeader>
-            <DialogTitle>Dispatch #{viewing?.id?.slice(0, 8).toUpperCase()}</DialogTitle>
-            <DialogDescription>Real-time ambulance assignment and trip status.</DialogDescription>
+            <DialogTitle>
+              Dispatch #{viewing?.id?.slice(0, 8).toUpperCase()}
+            </DialogTitle>
+            <DialogDescription>
+              Real-time ambulance assignment and trip status.
+            </DialogDescription>
           </DialogHeader>
           {viewing && (
             <div className="space-y-4 text-sm pt-2">
               <div className="flex gap-2">
                 <Badge
                   variant={
-                    viewing.priority === "CRITICAL" || viewing.priority === "HIGH"
+                    viewing.priority === "CRITICAL" ||
+                    viewing.priority === "HIGH"
                       ? "destructive"
                       : "secondary"
                   }
@@ -342,7 +355,8 @@ export default function PatientBookingsPage() {
                   <p className="flex items-center gap-2 pt-1">
                     <Truck className="h-4 w-4 text-brand-navy shrink-0" />
                     <span>
-                      <strong>Ambulance:</strong> {viewing.ambulance.vehicleNumber} (
+                      <strong>Ambulance:</strong>{" "}
+                      {viewing.ambulance.vehicleNumber} (
                       {viewing.ambulance.type})
                     </span>
                   </p>
@@ -361,78 +375,12 @@ export default function PatientBookingsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Pending Request Modal */}
-      <Dialog open={Boolean(editing)} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="sm:max-w-lg rounded-xl">
-          <DialogHeader>
-            <DialogTitle>Edit Pending Request</DialogTitle>
-            <DialogDescription>
-              Update pickup details before a dispatch coordinator assigns an ambulance.
-            </DialogDescription>
-          </DialogHeader>
-          <form
-            onSubmit={handleSubmit((vals) => editing && editMutation.mutate({ id: editing.id, data: vals }))}
-            className="space-y-4 pt-2"
-            noValidate
-          >
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-phone">Patient Phone</Label>
-              <Input id="edit-phone" {...register("patientPhone")} />
-              {errors.patientPhone && (
-                <p className="text-xs text-destructive">{errors.patientPhone.message}</p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-pickup">Pickup Address</Label>
-              <Input id="edit-pickup" {...register("pickupAddress")} />
-              {errors.pickupAddress && (
-                <p className="text-xs text-destructive">{errors.pickupAddress.message}</p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-dest">Destination Hospital</Label>
-              <Input id="edit-dest" {...register("destinationAddress")} />
-              {errors.destinationAddress && (
-                <p className="text-xs text-destructive">{errors.destinationAddress.message}</p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-priority">Criticality Level</Label>
-              <Select
-                value={editPriority}
-                onValueChange={(v) =>
-                  setValue("priority", (v as EditRequestValues["priority"]) || "HIGH")
-                }
-              >
-                <SelectTrigger id="edit-priority" className="w-full h-10 rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="CRITICAL">Critical (ICU)</SelectItem>
-                  <SelectItem value="HIGH">High (ICU)</SelectItem>
-                  <SelectItem value="MEDIUM">Medium (Basic)</SelectItem>
-                  <SelectItem value="LOW">Low (Basic)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setEditing(null)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={editMutation.isPending}>
-                {editMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Updating...
-                  </>
-                ) : (
-                  "Save Request"
-                )}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Lazy-Loaded Edit Pending Request Modal (State Colocated inside Modal) */}
+      {editing && (
+        <Suspense fallback={null}>
+          <EditBookingDialog editing={editing} onClose={handleCloseEdit} />
+        </Suspense>
+      )}
     </div>
   );
 }

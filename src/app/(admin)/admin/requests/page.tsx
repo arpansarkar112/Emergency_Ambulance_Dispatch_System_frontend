@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/axios";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
+import { DatasetVolumeToggle } from "@/components/shared/DatasetVolumeToggle";
+import { mergeWithRepresentativeRequests } from "@/lib/synthetic-data";
+import { useHighVolumeMode } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,7 +25,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { DollarSign, Eye, MapPin, Phone, Trash2, Truck, User } from "lucide-react";
+import {
+  DollarSign,
+  Eye,
+  MapPin,
+  Phone,
+  Trash2,
+  Truck,
+  User,
+} from "lucide-react";
 import type { AmbulanceItem, DispatchRequestItem } from "@/types";
 
 const PRIORITY_RANK: Record<string, number> = {
@@ -32,13 +43,21 @@ const PRIORITY_RANK: Record<string, number> = {
   LOW: 1,
 };
 
+const getRecommendedType = (priority: string) =>
+  priority === "CRITICAL" || priority === "HIGH" ? "ICU" : "BASIC";
+
 export default function AdminRequestsPage() {
   const queryClient = useQueryClient();
+  const highVolumeMode = useHighVolumeMode();
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [priorityFilter, setPriorityFilter] = useState("ALL");
-  const [viewingReq, setViewingReq] = useState<DispatchRequestItem | null>(null);
+  const [viewingReq, setViewingReq] = useState<DispatchRequestItem | null>(
+    null
+  );
 
-  const { data: requests, isPending: requestsLoading } = useQuery<DispatchRequestItem[]>({
+  const { data: requests, isPending: requestsLoading } = useQuery<
+    DispatchRequestItem[]
+  >({
     queryKey: ["admin-requests"],
     queryFn: async () => {
       const res = await api.get("/requests?limit=100");
@@ -47,7 +66,9 @@ export default function AdminRequestsPage() {
     refetchInterval: 8000,
   });
 
-  const { data: ambulances, isPending: ambulancesLoading } = useQuery<AmbulanceItem[]>({
+  const { data: ambulances, isPending: ambulancesLoading } = useQuery<
+    AmbulanceItem[]
+  >({
     queryKey: ["admin-ambulances"],
     queryFn: async () => {
       const res = await api.get("/ambulances?limit=100");
@@ -57,8 +78,17 @@ export default function AdminRequestsPage() {
   });
 
   const assignMutation = useMutation({
-    mutationFn: async ({ requestId, ambulanceId }: { requestId: string; ambulanceId: string }) => {
-      const res = await api.patch("/requests/assign", { requestId, ambulanceId });
+    mutationFn: async ({
+      requestId,
+      ambulanceId,
+    }: {
+      requestId: string;
+      ambulanceId: string;
+    }) => {
+      const res = await api.patch("/requests/assign", {
+        requestId,
+        ambulanceId,
+      });
       return res.data;
     },
     onSuccess: () => {
@@ -69,7 +99,9 @@ export default function AdminRequestsPage() {
     },
     onError: (error: unknown) => {
       const err = error as { response?: { data?: { message?: string } } };
-      toast.error(err.response?.data?.message || "Failed to allocate ambulance");
+      toast.error(
+        err.response?.data?.message || "Failed to allocate ambulance"
+      );
     },
   });
 
@@ -89,175 +121,227 @@ export default function AdminRequestsPage() {
     },
   });
 
-  const allAmbulances = Array.isArray(ambulances) ? ambulances : [];
-  const dispatchableAmbulances = allAmbulances.filter(
-    (a) => a.status === "AVAILABLE" && Boolean(a.driverId || a.driver?.id)
+  // Precompute O(1) lookup map of dispatchable ambulances by tier instead of O(N*M) nested filtering in every row
+  const ambulancesByTier = useMemo(() => {
+    const all = Array.isArray(ambulances) ? ambulances : [];
+    const ready = all.filter(
+      (a) => a.status === "AVAILABLE" && Boolean(a.driverId || a.driver?.id)
+    );
+    return {
+      ICU: ready.filter((a) => (a.type || "BASIC") === "ICU"),
+      BASIC: ready.filter((a) => (a.type || "BASIC") === "BASIC"),
+    };
+  }, [ambulances]);
+
+  const combinedRequests = useMemo(() => {
+    const live = Array.isArray(requests) ? requests : [];
+    return mergeWithRepresentativeRequests(live, highVolumeMode, 1200);
+  }, [requests, highVolumeMode]);
+
+  const rows = useMemo(() => {
+    return combinedRequests.filter((r) => {
+      if (statusFilter !== "ALL" && r.status !== statusFilter) return false;
+      if (priorityFilter !== "ALL" && r.priority !== priorityFilter)
+        return false;
+      return true;
+    });
+  }, [combinedRequests, statusFilter, priorityFilter]);
+
+  const rowKey = useCallback((r: DispatchRequestItem) => r.id, []);
+  const searchAccessor = useCallback(
+    (r: DispatchRequestItem) =>
+      `${r.id} ${r.patient?.email || ""} ${r.patientPhone || ""} ${r.pickupAddress || ""} ${r.destinationAddress || ""}`,
+    []
   );
 
-  const getRecommendedType = (priority: string) =>
-    priority === "CRITICAL" || priority === "HIGH" ? "ICU" : "BASIC";
-
-  const getMatchingAmbulances = (priority: string) => {
-    const rec = getRecommendedType(priority);
-    return dispatchableAmbulances.filter((a) => (a.type || "BASIC") === rec);
-  };
-
-  let rows = Array.isArray(requests) ? [...requests] : [];
-  if (statusFilter !== "ALL") rows = rows.filter((r) => r.status === statusFilter);
-  if (priorityFilter !== "ALL") rows = rows.filter((r) => r.priority === priorityFilter);
-
-  const columns: ColumnDef<DispatchRequestItem>[] = [
-    {
-      key: "id",
-      header: "Dispatch",
-      sortable: true,
-      sortValue: (r) => new Date(r.createdAt || 0).getTime(),
-      cell: (r) => (
-        <div>
-          <p className="font-mono font-semibold text-xs text-foreground">
-            #{r.id?.slice(0, 8).toUpperCase()}
-          </p>
-          <p className="text-[11px] text-muted-foreground">
-            {new Date(r.createdAt).toLocaleString()}
-          </p>
-        </div>
-      ),
+  const handleAssign = useCallback(
+    (requestId: string, ambulanceId: string) => {
+      assignMutation.mutate({ requestId, ambulanceId });
     },
-    {
-      key: "patient",
-      header: "Patient & Route",
-      cell: (r) => (
-        <div className="max-w-[260px] space-y-0.5">
-          <p className="text-xs font-medium text-foreground truncate">
-            {r.patient?.email || "Patient"} ({r.patientPhone})
-          </p>
-          <p className="text-[11px] text-muted-foreground truncate">
-            {r.pickupAddress} → {r.destinationAddress}
-          </p>
-        </div>
-      ),
+    [assignMutation]
+  );
+
+  const handleCancel = useCallback(
+    (requestId: string) => {
+      cancelMutation.mutate(requestId);
     },
-    {
-      key: "priority",
-      header: "Criticality",
-      sortable: true,
-      sortValue: (r) => PRIORITY_RANK[r.priority] || 0,
-      cell: (r) => (
-        <div className="flex flex-col gap-1">
+    [cancelMutation]
+  );
+
+  const columns = useMemo<ColumnDef<DispatchRequestItem>[]>(
+    () => [
+      {
+        key: "id",
+        header: "Dispatch",
+        sortable: true,
+        sortValue: (r) => new Date(r.createdAt || 0).getTime(),
+        cell: (r) => (
+          <div>
+            <p className="font-mono font-semibold text-xs text-foreground">
+              #{r.id?.slice(0, 8).toUpperCase()}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              {new Date(r.createdAt).toLocaleString()}
+            </p>
+          </div>
+        ),
+      },
+      {
+        key: "patient",
+        header: "Patient & Route",
+        cell: (r) => (
+          <div className="max-w-[260px] space-y-0.5">
+            <p className="text-xs font-medium text-foreground truncate">
+              {r.patient?.email || "Patient"} ({r.patientPhone})
+            </p>
+            <p className="text-[11px] text-muted-foreground truncate">
+              {r.pickupAddress} → {r.destinationAddress}
+            </p>
+          </div>
+        ),
+      },
+      {
+        key: "priority",
+        header: "Criticality",
+        sortable: true,
+        sortValue: (r) => PRIORITY_RANK[r.priority] || 0,
+        cell: (r) => (
+          <div className="flex flex-col gap-1">
+            <Badge
+              variant={
+                r.priority === "CRITICAL" || r.priority === "HIGH"
+                  ? "destructive"
+                  : "secondary"
+              }
+            >
+              {r.priority}
+            </Badge>
+            <span className="text-[10px] text-muted-foreground">
+              Needs {getRecommendedType(r.priority)}
+            </span>
+          </div>
+        ),
+      },
+      {
+        key: "status",
+        header: "Status",
+        sortable: true,
+        sortValue: (r) => r.status,
+        cell: (r) => (
           <Badge
             variant={
-              r.priority === "CRITICAL" || r.priority === "HIGH" ? "destructive" : "secondary"
+              r.status === "COMPLETED"
+                ? "secondary"
+                : r.status === "PENDING"
+                  ? "destructive"
+                  : "default"
             }
           >
-            {r.priority}
+            {r.status}
           </Badge>
-          <span className="text-[10px] text-muted-foreground">
-            Needs {getRecommendedType(r.priority)}
-          </span>
-        </div>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      sortable: true,
-      sortValue: (r) => r.status,
-      cell: (r) => (
-        <Badge
-          variant={
-            r.status === "COMPLETED"
-              ? "secondary"
-              : r.status === "PENDING"
-                ? "destructive"
-                : "default"
-          }
-        >
-          {r.status}
-        </Badge>
-      ),
-    },
-    {
-      key: "allocation",
-      header: "Unit Allocation",
-      cell: (r) => {
-        const recType = getRecommendedType(r.priority);
-        const matching = getMatchingAmbulances(r.priority);
-        const assignedAmb = r.ambulance || r.dispatch?.ambulance;
-
-        if (r.status === "PENDING") {
-          return (
-            <Select
-              disabled={assignMutation.isPending || matching.length === 0}
-              onValueChange={(val) => {
-                if (val) assignMutation.mutate({ requestId: r.id, ambulanceId: String(val) });
-              }}
-            >
-              <SelectTrigger className="w-[215px] h-8 rounded-lg text-xs">
-                <SelectValue
-                  placeholder={
-                    matching.length === 0 ? `No ready ${recType} unit` : `Allocate ${recType} Unit`
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {matching.map((amb: AmbulanceItem) => (
-                  <SelectItem key={amb.id} value={amb.id}>
-                    {amb.vehicleNumber} ({amb.type})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          );
-        }
-
-        return assignedAmb ? (
-          <div className="text-xs">
-            <p className="font-medium text-foreground">{assignedAmb.vehicleNumber}</p>
-            <p className="text-[11px] text-muted-foreground">{assignedAmb.type}</p>
-          </div>
-        ) : (
-          <span className="text-xs text-muted-foreground">—</span>
-        );
+        ),
       },
-    },
-    {
-      key: "actions",
-      header: "Actions",
-      className: "text-right",
-      cell: (r) => (
-        <div className="flex items-center justify-end gap-1.5">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => setViewingReq(r)}
-            aria-label="View dispatch details"
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-          {r.status === "COMPLETED" && (
-            <Link href="/admin/payments">
-              <Button variant="outline" size="xs" className="gap-1">
-                <DollarSign className="h-3 w-3" />
-                Bill
+      {
+        key: "allocation",
+        header: "Unit Allocation",
+        cell: (r) => {
+          const recType = getRecommendedType(r.priority);
+          const matching = ambulancesByTier[recType] || [];
+          const assignedAmb = r.ambulance || r.dispatch?.ambulance;
+
+          if (r.status === "PENDING") {
+            return (
+              <Select
+                disabled={assignMutation.isPending || matching.length === 0}
+                onValueChange={(val) => {
+                  if (val) handleAssign(r.id, String(val));
+                }}
+              >
+                <SelectTrigger className="w-[215px] h-8 rounded-lg text-xs">
+                  <SelectValue
+                    placeholder={
+                      matching.length === 0
+                        ? `No ready ${recType} unit`
+                        : `Allocate ${recType} Unit`
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {matching.map((amb: AmbulanceItem) => (
+                    <SelectItem key={amb.id} value={amb.id}>
+                      {amb.vehicleNumber} ({amb.type})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            );
+          }
+
+          return assignedAmb ? (
+            <div className="text-xs">
+              <p className="font-medium text-foreground">
+                {assignedAmb.vehicleNumber}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {assignedAmb.type}
+              </p>
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          );
+        },
+      },
+      {
+        key: "actions",
+        header: "Actions",
+        className: "text-right",
+        cell: (r) => {
+          const isSynthetic = r.id.startsWith("sim-");
+          return (
+            <div className="flex items-center justify-end gap-1.5">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setViewingReq(r)}
+                aria-label="View dispatch details"
+              >
+                <Eye className="h-4 w-4" />
               </Button>
-            </Link>
-          )}
-          {r.status !== "COMPLETED" && r.status !== "CANCELLED" && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-destructive hover:text-destructive"
-              onClick={() => cancelMutation.mutate(r.id)}
-              disabled={cancelMutation.isPending}
-              aria-label="Cancel request"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-      ),
-    },
-  ];
+              {r.status === "COMPLETED" && (
+                <Link href="/admin/payments">
+                  <Button variant="outline" size="xs" className="gap-1">
+                    <DollarSign className="h-3 w-3" />
+                    Bill
+                  </Button>
+                </Link>
+              )}
+              {!isSynthetic &&
+                r.status !== "COMPLETED" &&
+                r.status !== "CANCELLED" && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => handleCancel(r.id)}
+                    disabled={cancelMutation.isPending}
+                    aria-label="Cancel request"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+            </div>
+          );
+        },
+      },
+    ],
+    [
+      ambulancesByTier,
+      assignMutation.isPending,
+      cancelMutation.isPending,
+      handleAssign,
+      handleCancel,
+    ]
+  );
 
   return (
     <div className="flex-1 space-y-6 p-4 sm:p-8">
@@ -267,28 +351,34 @@ export default function AdminRequestsPage() {
             Emergency Requests Queue
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Triage patient emergencies and strictly match Critical/High calls to Mobile ICU units.
+            Triage patient emergencies and strictly match Critical/High calls to
+            Mobile ICU units.
           </p>
         </div>
-        <Link href="/admin/ambulances">
-          <Button variant="outline" size="sm">
-            Manage Fleet Readiness
-          </Button>
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <DatasetVolumeToggle totalCount={combinedRequests.length} />
+          <Link href="/admin/ambulances">
+            <Button variant="outline" size="sm">
+              Manage Fleet Readiness
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <DataTable
         data={rows}
         columns={columns}
-        rowKey={(r) => r.id}
+        rowKey={rowKey}
         isLoading={requestsLoading || ambulancesLoading}
-        searchPlaceholder="Search patient, address, or dispatch ID..."
-        searchAccessor={(r) =>
-          `${r.id} ${r.patient?.email || ""} ${r.patientPhone || ""} ${r.pickupAddress || ""} ${r.destinationAddress || ""}`
-        }
+        searchPlaceholder="Search patient, address, or dispatch ID (debounced)..."
+        searchAccessor={searchAccessor}
+        profilerId="AdminRequestsDataTable"
         filterSlot={
           <>
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v || "ALL")}>
+            <Select
+              value={statusFilter}
+              onValueChange={(v) => setStatusFilter(v || "ALL")}
+            >
               <SelectTrigger className="w-[150px] h-10 rounded-xl">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -302,7 +392,10 @@ export default function AdminRequestsPage() {
                 <SelectItem value="CANCELLED">Cancelled</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={priorityFilter} onValueChange={(v) => setPriorityFilter(v || "ALL")}>
+            <Select
+              value={priorityFilter}
+              onValueChange={(v) => setPriorityFilter(v || "ALL")}
+            >
               <SelectTrigger className="w-[150px] h-10 rounded-xl">
                 <SelectValue placeholder="Criticality" />
               </SelectTrigger>
@@ -319,7 +412,10 @@ export default function AdminRequestsPage() {
       />
 
       {/* View Dispatch Details Modal */}
-      <Dialog open={Boolean(viewingReq)} onOpenChange={(o) => !o && setViewingReq(null)}>
+      <Dialog
+        open={Boolean(viewingReq)}
+        onOpenChange={(o) => !o && setViewingReq(null)}
+      >
         <DialogContent className="sm:max-w-lg rounded-xl">
           <DialogHeader>
             <DialogTitle>
@@ -334,7 +430,8 @@ export default function AdminRequestsPage() {
               <div className="flex flex-wrap gap-2">
                 <Badge
                   variant={
-                    viewingReq.priority === "CRITICAL" || viewingReq.priority === "HIGH"
+                    viewingReq.priority === "CRITICAL" ||
+                    viewingReq.priority === "HIGH"
                       ? "destructive"
                       : "secondary"
                   }
@@ -353,7 +450,8 @@ export default function AdminRequestsPage() {
                 <p className="flex items-start gap-2">
                   <MapPin className="h-4 w-4 text-brand-emerald mt-0.5 shrink-0" />
                   <span>
-                    <strong>Destination:</strong> {viewingReq.destinationAddress}
+                    <strong>Destination:</strong>{" "}
+                    {viewingReq.destinationAddress}
                   </span>
                 </p>
                 <p className="flex items-center gap-2">
@@ -365,14 +463,16 @@ export default function AdminRequestsPage() {
                 <p className="flex items-center gap-2">
                   <User className="h-4 w-4 text-muted-foreground shrink-0" />
                   <span>
-                    <strong>Patient Email:</strong> {viewingReq.patient?.email || "N/A"}
+                    <strong>Patient Email:</strong>{" "}
+                    {viewingReq.patient?.email || "N/A"}
                   </span>
                 </p>
                 {viewingReq.ambulance && (
                   <p className="flex items-center gap-2">
                     <Truck className="h-4 w-4 text-brand-navy shrink-0" />
                     <span>
-                      <strong>Assigned Unit:</strong> {viewingReq.ambulance.vehicleNumber} (
+                      <strong>Assigned Unit:</strong>{" "}
+                      {viewingReq.ambulance.vehicleNumber} (
                       {viewingReq.ambulance.type})
                     </span>
                   </p>

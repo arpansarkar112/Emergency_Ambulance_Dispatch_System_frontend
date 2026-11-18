@@ -17,8 +17,13 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
-import { useAppStore } from "@/lib/store";
-import { useEffect } from "react";
+import {
+  useIsSidebarOpen,
+  useSetSidebarOpen,
+  useSetUserRole,
+  useToggleSidebar,
+} from "@/lib/store";
+import { useCallback, useEffect } from "react";
 import { ThemeToggle } from "./ThemeToggle";
 
 const routes = [
@@ -34,11 +39,18 @@ const routes = [
 
 export function AdminSidebar() {
   const pathname = usePathname();
-  const { isSidebarOpen, toggleSidebar, setSidebarOpen, setUserRole } = useAppStore();
+  const isSidebarOpen = useIsSidebarOpen();
+  const toggleSidebar = useToggleSidebar();
+  const setSidebarOpen = useSetSidebarOpen();
+  const setUserRole = useSetUserRole();
 
   useEffect(() => {
     setUserRole("admin");
   }, [setUserRole]);
+
+  const closeSidebar = useCallback(() => {
+    setSidebarOpen(false);
+  }, [setSidebarOpen]);
 
   return (
     <>
@@ -67,7 +79,7 @@ export function AdminSidebar() {
       {isSidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs md:hidden"
-          onClick={() => setSidebarOpen(false)}
+          onClick={closeSidebar}
         />
       )}
 
@@ -80,7 +92,7 @@ export function AdminSidebar() {
         <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
           <Link
             href="/admin"
-            onClick={() => setSidebarOpen(false)}
+            onClick={closeSidebar}
             className="flex items-center gap-2.5 font-bold text-sidebar-foreground hover:opacity-85 transition-opacity"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground">
