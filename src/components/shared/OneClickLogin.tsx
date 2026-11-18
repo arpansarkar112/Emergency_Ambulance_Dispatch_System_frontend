@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { User, Truck, Loader2 } from "lucide-react";
+import { User, Truck, ShieldCheck, Loader2 } from "lucide-react";
 import { api } from "@/lib/axios";
 
 interface OneClickLoginProps {
@@ -30,6 +30,15 @@ const DEMO_ACCOUNTS = [
     redirectTo: "/provider",
     icon: Truck,
   },
+  {
+    key: "ADMIN",
+    label: "Demo Admin",
+    sublabel: "admin@ambulance.com",
+    email: "admin@ambulance.com",
+    password: "admin123",
+    redirectTo: "/admin",
+    icon: ShieldCheck,
+  },
 ] as const;
 
 export function OneClickLogin({ onSelectCredentials }: OneClickLoginProps) {
@@ -41,7 +50,6 @@ export function OneClickLogin({ onSelectCredentials }: OneClickLoginProps) {
       onSelectCredentials(account.email, account.password);
     }
     try {
-      // 1. Authenticate against /api/v1/auth/login
       const apiRes = await api.post("/auth/login", {
         email: account.email,
         password: account.password,
@@ -52,7 +60,6 @@ export function OneClickLogin({ onSelectCredentials }: OneClickLoginProps) {
         throw new Error(apiRes.data?.message || "Invalid credentials");
       }
 
-      // 2. Establish NextAuth session with the verified token & user
       const res = await signIn("credentials", {
         redirect: false,
         email: account.email,
@@ -66,13 +73,12 @@ export function OneClickLogin({ onSelectCredentials }: OneClickLoginProps) {
         setLoading(null);
       } else {
         toast.success(`Signed in as ${account.label}`);
-        window.location.href = account.redirectTo;
+        window.location.assign(account.redirectTo);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } }; message?: string };
       const msg =
-        error.response?.data?.message ||
-        error.message ||
-        "An error occurred during demo login";
+        err.response?.data?.message || err.message || "An error occurred during demo login";
       toast.error(`Demo login failed: ${msg}`);
       setLoading(null);
     }
@@ -82,16 +88,16 @@ export function OneClickLogin({ onSelectCredentials }: OneClickLoginProps) {
     <div className="flex flex-col space-y-3 pt-6">
       <div className="relative">
         <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t border-gray-100" />
+          <span className="w-full border-t border-border" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-white px-2 font-medium text-muted-foreground">
-            One-Click Demo Role Login
+          <span className="bg-card px-2.5 font-medium text-muted-foreground">
+            Instant Demo Login (Auto-Fill)
           </span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-2.5 pt-1">
+      <div className="grid grid-cols-1 gap-2 pt-1">
         {DEMO_ACCOUNTS.map((account) => {
           const Icon = account.icon;
           const isBusy = loading === account.key;
@@ -100,7 +106,7 @@ export function OneClickLogin({ onSelectCredentials }: OneClickLoginProps) {
               key={account.key}
               type="button"
               variant="outline"
-              className="w-full h-auto py-2.5 px-3.5 flex items-center justify-between text-left border-gray-200 hover:border-primary/40 hover:bg-primary/5 transition-colors"
+              className="w-full h-auto py-2.5 px-3.5 flex items-center justify-between text-left hover:border-primary/50 hover:bg-primary/5 transition-colors"
               onClick={() => handleDemoLogin(account)}
               disabled={loading !== null}
             >
@@ -110,7 +116,7 @@ export function OneClickLogin({ onSelectCredentials }: OneClickLoginProps) {
                 ) : (
                   <Icon className="h-4 w-4 text-primary shrink-0" />
                 )}
-                <span className="font-medium text-xs sm:text-sm text-gray-900">
+                <span className="font-medium text-xs sm:text-sm text-foreground">
                   {account.label}
                 </span>
               </span>
@@ -124,4 +130,3 @@ export function OneClickLogin({ onSelectCredentials }: OneClickLoginProps) {
     </div>
   );
 }
-

@@ -1,31 +1,27 @@
 "use client";
 
-import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { AlertTriangle } from "lucide-react";
 
-export default function GlobalError({
-  error,
+export default function RouteError({
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  useEffect(() => {
-    // Log the error to an error reporting service
-    console.error(error);
-  }, [error]);
-
   return (
-    <html>
-      <body>
-        <div className="flex min-h-screen flex-col items-center justify-center p-4 text-center">
-          <h2 className="text-3xl font-bold mb-4">Something went wrong!</h2>
-          <p className="text-muted-foreground mb-8">
-            An unexpected error occurred. Our team has been notified.
-          </p>
-          <Button onClick={() => reset()}>Try again</Button>
-        </div>
-      </body>
-    </html>
+    <div className="flex min-h-[70vh] flex-col items-center justify-center bg-background p-6 text-center">
+      <div className="rounded-2xl bg-destructive/10 p-4 text-destructive mb-5">
+        <AlertTriangle className="h-10 w-10" />
+      </div>
+      <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
+        Something went wrong
+      </h2>
+      <p className="text-sm text-muted-foreground max-w-md mb-6">
+        An unexpected issue interrupted this view. You can safely retry below without losing your
+        session.
+      </p>
+      <Button onClick={() => reset()}>Try Again</Button>
+    </div>
   );
 }

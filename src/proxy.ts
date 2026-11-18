@@ -8,16 +8,13 @@ function getRoleHomePath(role?: string): string {
   return "/dashboard";
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const secret =
     process.env.NEXTAUTH_SECRET ||
     "my_super_secret_jwt_token_for_nextauth_development";
 
-  // Check both secure (__Secure-next-auth.session-token on HTTPS/Vercel)
-  // and standard (next-auth.session-token on HTTP/localhost) cookies
-  // so a misconfigured NEXTAUTH_URL=http://localhost:3000 in Vercel env vars never breaks auth.
   let token = await getToken({
     req: request,
     secret,
@@ -65,4 +62,3 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: ["/admin/:path*", "/provider/:path*", "/dashboard/:path*"],
 };
-
